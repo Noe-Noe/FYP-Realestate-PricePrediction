@@ -1,0 +1,372 @@
+/* Agent Listings Page Styles */
+.agent-listings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Search Section */
+.agent-listings-search-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.agent-listings-search-container {
+  position: relative;
+  max-width: 600px;
+}
+
+.agent-listings-search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.125rem;
+  color: #6b7280;
+  z-index: 1;
+}
+
+.agent-listings-search-input {
+  width: 100%;
+  padding: 0.875rem 1rem 0.875rem 3rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  color: #374151;
+  background: #f9fafb;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.agent-listings-search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.agent-listings-search-input::placeholder {
+  color: #9ca3af;
+}
+
+/* Listings Table */
+.agent-listings-table-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.agent-listings-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.agent-listings-table-header {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.agent-listings-table-header th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.agent-listings-table-body tr {
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s;
+}
+
+.agent-listings-table-body tr:hover {
+  background-color: #f9fafb;
+}
+
+.agent-listings-table-body tr:last-child {
+  border-bottom: none;
+}
+
+.agent-listings-table-body td {
+  padding: 1rem;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.agent-listings-property-image {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.agent-listings-property-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.agent-listings-property-address {
+  font-weight: 500;
+  color: #111827;
+}
+
+.agent-listings-property-type {
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.agent-listings-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.agent-listings-status.active {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+
+
+.agent-listings-status.sold {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.agent-listings-status.under-contract {
+  background-color: #f3e8ff;
+  color: #7c3aed;
+}
+
+.agent-listings-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.agent-listings-action-btn {
+  padding: 0.5rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agent-listings-action-btn:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.agent-listings-action-btn.edit {
+  color: #3b82f6;
+}
+
+.agent-listings-action-btn.edit:hover {
+  background-color: #eff6ff;
+}
+
+.agent-listings-action-btn.delete,
+.agent-listings-action-btn.remove {
+  color: #ef4444;
+}
+
+.agent-listings-action-btn.delete:hover,
+.agent-listings-action-btn.remove:hover {
+  background-color: #fef2f2;
+}
+
+.agent-listings-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f3f4f6;
+  color: #9ca3af;
+}
+
+.agent-listings-action-btn:disabled:hover {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+}
+
+/* Pagination */
+.agent-listings-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+
+.agent-listings-pagination-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.agent-listings-pagination-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.agent-listings-pagination-btn.active {
+  background-color: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.agent-listings-pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.agent-listings-pagination-info {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0 1rem;
+}
+
+/* Add Listing Section */
+.agent-listings-add-listing-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.agent-listings-add-listing-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.agent-listings-add-listing-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.agent-listings-add-listing-btn:hover {
+  background-color: #2563eb;
+}
+
+.agent-listings-add-listing-icon {
+  font-size: 1.125rem;
+}
+
+/* Empty State */
+.agent-listings-empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #6b7280;
+}
+
+.agent-listings-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.agent-listings-empty-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.agent-listings-empty-description {
+  margin-bottom: 1.5rem;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .agent-listings-main-content {
+    padding: 2rem;
+  }
+  
+  .agent-listings-table-header th,
+  .agent-listings-table-body td {
+    padding: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .agent-listings-main-content {
+    padding: 1.5rem;
+  }
+  
+  .agent-listings-table-container {
+    overflow-x: auto;
+  }
+  
+  .agent-listings-table {
+    min-width: 600px;
+  }
+  
+  .agent-listings-search-container {
+    max-width: 100%;
+  }
+  
+  .agent-listings-pagination {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .agent-listings-main-content {
+    padding: 1rem;
+  }
+  
+  .agent-listings-main-title {
+    font-size: 1.875rem;
+  }
+  
+  .agent-listings-search-section,
+  .agent-listings-table-container,
+  .agent-listings-add-listing-section {
+    padding: 1rem;
+  }
+  
+  .agent-listings-table-header th,
+  .agent-listings-table-body td {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+  
+  .agent-listings-property-image {
+    width: 50px;
+    height: 50px;
+  }
+}

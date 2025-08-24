@@ -1,0 +1,337 @@
+/* Agent User Dashboard Styles */
+.agent-user-dashboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Stats Grid */
+.agent-user-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.agent-user-stat-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.agent-user-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.agent-user-stat-card h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.agent-user-stat-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 0.25rem 0;
+}
+
+.agent-user-stat-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Section Titles */
+.agent-user-section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 1.5rem 0;
+  letter-spacing: -0.025em;
+}
+
+
+/* Assigned Regions Section */
+.agent-user-regions-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 2rem;
+}
+
+.agent-user-regions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.agent-user-region-card {
+  background: #f8fafc;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.agent-user-region-district {
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.agent-user-region-location {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* Recent Listings Section */
+.agent-user-listings-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 2rem;
+}
+
+.agent-user-listings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.agent-user-listing-card {
+  background: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.agent-user-listing-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.agent-user-listing-image {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+}
+
+.agent-user-listing-content {
+  padding: 1rem;
+}
+
+.agent-user-listing-address {
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.agent-user-listing-type {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.agent-user-listing-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.agent-user-listing-status.active {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.agent-user-listing-status.pending {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.agent-user-listing-status.under-offer {
+  background-color: #f3e8ff;
+  color: #7c3aed;
+}
+
+/* Recent Activity Section */
+.agent-user-activity-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.agent-user-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.agent-user-activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.agent-user-activity-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+
+.agent-user-activity-icon.inquiry {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.agent-user-activity-icon.status {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.agent-user-activity-icon.system {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.agent-user-activity-content {
+  flex: 1;
+}
+
+.agent-user-activity-title {
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.agent-user-activity-details {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.agent-user-activity-time {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+/* Quick Actions */
+.agent-user-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.agent-user-quick-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #374151;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.agent-user-quick-action-btn:hover {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+}
+
+.agent-user-quick-action-icon {
+  width: 24px;
+  height: 24px;
+  color: #3b82f6;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .agent-user-main-content {
+    padding: 2rem;
+  }
+  
+  .agent-user-stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  
+  .agent-user-listings-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .agent-user-main-content {
+    padding: 1.5rem;
+  }
+  
+  .agent-user-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .agent-user-listings-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .agent-user-quick-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .agent-user-main-content {
+    padding: 1rem;
+  }
+  
+  .agent-user-main-title {
+    font-size: 1.875rem;
+  }
+  
+  .agent-user-section-title {
+    font-size: 1.25rem;
+  }
+  
+  .agent-user-stats-grid,
+  .agent-user-listings-grid,
+  .agent-user-regions-grid {
+    gap: 1rem;
+  }
+  
+  .agent-user-stat-card,
+  .agent-user-listing-card,
+  .agent-user-region-card {
+    padding: 1rem;
+  }
+}

@@ -1,0 +1,475 @@
+/* Property Listing Styles - Using consistent layout */
+
+/* Loading State */
+.property-listing-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #f8f9fa;
+}
+
+.property-listing-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e2e8f0;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: property-listing-spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes property-listing-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Breadcrumbs */
+.property-listing-breadcrumbs {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.property-listing-back-button {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
+  transition: color 0.2s;
+}
+
+.property-listing-back-button:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.property-listing-breadcrumb-separator {
+  margin: 0 0.5rem;
+  color: #6b7280;
+}
+
+.property-listing-breadcrumb-current {
+  color: #374151;
+  font-weight: 500;
+}
+
+/* Property Header */
+.property-listing-address {
+  font-size: 1.125rem;
+  color: #6b7280;
+  margin: 0.5rem 0;
+  text-align: center;
+}
+
+.property-listing-price {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #059669;
+  margin: 0.5rem 0;
+  text-align: center;
+}
+
+/* Property Image */
+.property-listing-image-section {
+  margin-bottom: 3rem;
+}
+
+.property-listing-main-image {
+  width: 100%;
+  height: 400px;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Property Details Grid */
+.property-listing-details-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.property-listing-section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 1.5rem 0;
+  letter-spacing: -0.025em;
+}
+
+/* Property Summary Card */
+.property-listing-summary-card {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.property-listing-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.property-listing-summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.property-listing-summary-item:last-child {
+  border-bottom: none;
+}
+
+.property-listing-summary-label {
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.property-listing-summary-value {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+/* Amenities Section within Summary Card */
+.property-listing-amenities-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+.property-listing-amenities-subtitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 1rem 0;
+  letter-spacing: -0.025em;
+}
+
+.property-listing-amenities-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.property-listing-amenity-block {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+  min-width: 120px;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.property-listing-amenity-block:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+}
+
+/* Description */
+.property-listing-description {
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.property-listing-description-text {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: #374151;
+  margin: 0;
+}
+
+/* Location & Map */
+.property-listing-location {
+  margin-bottom: 3rem;
+}
+
+.property-listing-map-container {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+.property-listing-map-container-inner {
+  height: 400px;
+  width: 100%;
+}
+
+/* Amenities Panel */
+.property-listing-amenities-panel {
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-top: 1px solid #e2e8f0;
+}
+
+.property-listing-amenities-header {
+  margin-bottom: 1rem;
+}
+
+.property-listing-amenities-header h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 1rem 0;
+}
+
+.property-listing-amenity-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.property-listing-amenity-chip {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  background: white;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.property-listing-amenity-chip:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.property-listing-amenity-chip.property-listing-active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.property-listing-amenities-loading,
+.property-listing-amenities-error,
+.property-listing-amenities-empty {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.property-listing-amenities-error {
+  color: #dc2626;
+}
+
+.property-listing-amenities-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.property-listing-amenity-item {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s ease;
+}
+
+.property-listing-amenity-item:last-child {
+  border-bottom: none;
+}
+
+.property-listing-amenity-item:hover {
+  background: #f3f4f6;
+}
+
+.property-listing-amenity-main {
+  margin-bottom: 0.5rem;
+}
+
+.property-listing-amenity-name {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.property-listing-amenity-address {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.property-listing-amenity-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.75rem;
+}
+
+.property-listing-amenity-rating {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.property-listing-amenity-distance {
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.property-listing-amenity-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.property-listing-amenity-link:hover {
+  text-decoration: underline;
+}
+
+/* Contact Agent */
+.property-listing-contact-agent-section {
+  background-color: #f8f9fa;
+  padding: 2rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.property-listing-agent-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.property-listing-agent-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.property-listing-agent-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #3b82f6;
+}
+
+.property-listing-agent-details h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 0.25rem 0;
+}
+
+.property-listing-agent-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 0.25rem 0;
+}
+
+.property-listing-agent-title {
+  color: #6b7280;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.property-listing-contact-agent-btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
+}
+
+.property-listing-contact-agent-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3);
+}
+
+.property-listing-whatsapp-icon {
+  font-size: 1.25rem;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .property-listing-details-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  /* Using consistent layout classes */
+}
+
+@media (max-width: 768px) {
+  /* Using consistent layout classes */
+  
+  /* Using consistent layout classes */
+  
+  .property-listing-price {
+    font-size: 1.5rem;
+  }
+  
+  .property-listing-main-image {
+    height: 300px;
+  }
+  
+  .property-listing-agent-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 1.5rem;
+  }
+  
+  .property-listing-contact-agent-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Using consistent layout classes */
+  
+  /* Using consistent layout classes */
+  
+  .property-listing-main-image {
+    height: 250px;
+  }
+  
+  .property-listing-summary-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  
+  .property-listing-map-coordinates {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
