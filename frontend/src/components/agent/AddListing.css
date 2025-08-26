@@ -1,0 +1,415 @@
+/* Updated AddListing CSS - v3.0 - Fixed Layout */
+.add-listing-content {
+  max-width: 1200px !important;
+  margin: 0 !important;
+  width: 100% !important;
+  padding: 0 1rem !important;
+  overflow-y: auto !important;
+  min-height: 100vh !important;
+  position: relative !important;
+}
+
+.add-listing-form {
+  background: white !important;
+  border-radius: 12px !important;
+  padding: 2rem !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  width: 100% !important;
+  min-height: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2rem !important;
+  overflow: visible !important;
+  position: relative !important;
+  margin-bottom: 2rem !important;
+  max-height: none !important;
+}
+
+.add-listing-form-section {
+  margin-bottom: 2rem !important;
+  padding: 1.5rem !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  width: 100% !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  position: relative !important;
+  z-index: 1 !important;
+  display: block !important;
+}
+
+.add-listing-form-section:last-of-type {
+  border-bottom: none !important;
+  margin-bottom: 0 !important;
+}
+
+.add-listing-section-title {
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+  margin: 0 0 1.5rem 0 !important;
+  padding: 0.75rem !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-radius: 6px !important;
+  border-left: 4px solid #3b82f6 !important;
+  display: block !important;
+}
+
+.add-listing-form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+  gap: 1.5rem !important;
+  width: 100% !important;
+}
+
+.add-listing-form-group {
+  display: flex !important;
+  flex-direction: column !important;
+  margin-bottom: 1.5rem !important;
+  padding: 0.5rem !important;
+  border: 1px solid transparent !important;
+}
+
+.add-listing-form-group label {
+  font-weight: 500 !important;
+  color: #475569 !important;
+  margin-bottom: 0.5rem !important;
+  font-size: 0.875rem !important;
+}
+
+.add-listing-form-input,
+.add-listing-form-select,
+.add-listing-form-textarea {
+  width: 100% !important;
+  padding: 0.75rem !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 8px !important;
+  font-size: 0.875rem !important;
+  color: #1e293b !important;
+  background-color: white !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+  box-sizing: border-box !important;
+}
+
+.add-listing-form-input:focus,
+.add-listing-form-select:focus,
+.add-listing-form-textarea:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Image Upload Styles */
+.add-listing-image-upload-area {
+  border: 2px dashed #d1d5db !important;
+  border-radius: 8px !important;
+  padding: 2rem !important;
+  text-align: center !important;
+  background-color: #f9fafb !important;
+  transition: border-color 0.2s, background-color 0.2s !important;
+  position: relative !important;
+}
+
+.add-listing-image-upload-area:hover {
+  border-color: #3b82f6 !important;
+  background-color: #f0f9ff !important;
+}
+
+.add-listing-upload-instructions {
+  color: #6b7280 !important;
+  font-size: 0.875rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.add-listing-file-input {
+  display: none !important;
+}
+
+.add-listing-upload-button {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0.75rem 1.5rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: background-color 0.2s !important;
+  display: inline-block !important;
+}
+
+.add-listing-upload-button:hover {
+  background-color: #2563eb !important;
+}
+
+.add-listing-upload-button:disabled {
+  background-color: #9ca3af !important;
+  cursor: not-allowed !important;
+}
+
+.add-listing-uploaded-images {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+  gap: 1rem !important;
+  margin-top: 1.5rem !important;
+}
+
+.add-listing-image-preview {
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: white !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.add-listing-preview-image {
+  width: 100% !important;
+  height: 150px !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+.add-listing-image-info {
+  padding: 0.75rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.add-listing-image-name {
+  font-size: 0.75rem !important;
+  color: #6b7280 !important;
+  word-break: break-word !important;
+  line-height: 1.2 !important;
+}
+
+.add-listing-remove-image-btn {
+  background-color: #dc2626 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: background-color 0.2s !important;
+  width: 100% !important;
+}
+
+.add-listing-remove-image-btn:hover {
+  background-color: #b91c1c !important;
+}
+
+.add-listing-remove-image-btn:disabled {
+  background-color: #9ca3af !important;
+  cursor: not-allowed !important;
+}
+
+.add-listing-price-type-buttons {
+  display: flex !important;
+  gap: 0.5rem !important;
+  margin-top: 0.75rem !important;
+  padding: 0.5rem !important;
+  background: rgba(248, 250, 252, 0.8) !important;
+  border-radius: 6px !important;
+}
+
+.add-listing-price-type-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background-color: #f8fafc;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-listing-price-type-btn:hover {
+  background-color: #e2e8f0;
+}
+
+.add-listing-price-type-btn.active {
+  background-color: #64748b;
+  color: white;
+  border-color: #64748b;
+}
+
+/* Amenities Section */
+.add-listing-amenities-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  gap: 1rem !important;
+  background: rgba(248, 250, 252, 0.5) !important;
+  padding: 1rem !important;
+  border-radius: 8px !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.add-listing-checkbox-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #475569;
+  user-select: none;
+}
+
+.add-listing-checkbox-label input[type="checkbox"] {
+  margin-right: 0.75rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: #3b82f6;
+}
+
+/* Form Actions */
+.add-listing-form-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 1rem !important;
+  margin-top: 2rem !important;
+  padding-top: 2rem !important;
+  border-top: 1px solid #e2e8f0 !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  padding: 1.5rem !important;
+  border-radius: 8px !important;
+}
+
+.add-listing-btn-cancel,
+.add-listing-btn-save {
+  padding: 0.75rem 1.5rem !important;
+  border-radius: 8px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+  border: none !important;
+  min-width: 120px !important;
+}
+
+.add-listing-btn-cancel {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+.add-listing-btn-cancel:hover {
+  background-color: #e2e8f0;
+}
+
+.add-listing-btn-save {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.add-listing-btn-save:hover {
+  background-color: #2563eb;
+}
+
+/* Existing Images Section */
+.add-listing-existing-images {
+  margin-bottom: 1.5rem;
+}
+
+.add-listing-subsection-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 1rem;
+}
+
+.add-listing-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.add-listing-existing-image-item {
+  position: relative;
+  text-align: center;
+}
+
+.add-listing-existing-image {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.add-listing-image-overlay {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+.add-listing-remove-image-btn {
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.add-listing-remove-image-btn:hover {
+  background-color: #dc2626;
+}
+
+.add-listing-new-images {
+  margin-top: 1.5rem;
+}
+
+.add-listing-new-image-item {
+  text-align: center;
+}
+
+.add-listing-new-image {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .add-listing-content {
+    padding: 1.5rem;
+  }
+  
+  .add-listing-form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .add-listing-amenities-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .add-listing-form-actions {
+    flex-direction: column;
+  }
+  
+  .add-listing-btn-cancel,
+  .add-listing-btn-save {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .add-listing-section-title {
+    font-size: 1.125rem;
+  }
+  
+  .add-listing-content {
+    padding: 1rem;
+  }
+}
