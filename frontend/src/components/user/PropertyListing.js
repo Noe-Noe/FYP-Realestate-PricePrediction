@@ -53,6 +53,17 @@ const PropertyListing = () => {
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
   const placesServiceRef = useRef(null);
+  const mapInitializedRef = useRef(false);
+
+  // Function to generate initials from agent name
+  const getAgentInitials = (name) => {
+    if (!name) return 'A';
+    const words = name.trim().split(' ');
+    if (words.length === 1) {
+      return words[0].charAt(0).toUpperCase();
+    }
+    return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
+  };
 
   // Fallback mock property data (used only if API fails)
   const getFallbackProperty = (propertyId) => ({
@@ -87,6 +98,7 @@ const PropertyListing = () => {
     const fetchProperty = async () => {
       try {
         setLoading(true);
+        mapInitializedRef.current = false; // Reset map initialization flag
         const response = await propertiesAPI.getById(id);
         console.log('Fetched property:', response);
         
@@ -118,8 +130,8 @@ const PropertyListing = () => {
             phone: '+65 9123 4567'
           },
           location: {
-            lat: response.latitude || 1.3521,
-            lng: response.longitude || 103.8198,
+            lat: parseFloat(response.latitude) || 1.3521,
+            lng: parseFloat(response.longitude) || 103.8198,
             address: response.address
           }
         };
@@ -134,6 +146,11 @@ const PropertyListing = () => {
           setImages([defaultImage]);
         }
         
+        console.log('Property loaded successfully:', transformedProperty);
+        console.log('Property coordinates:', transformedProperty.location);
+        console.log('Property address for geocoding:', transformedProperty.location.address);
+        console.log('Raw API response address:', response.address);
+        console.log('Raw API response coordinates:', response.latitude, response.longitude);
         setProperty(transformedProperty);
       } catch (error) {
         console.error('Error fetching property:', error);
@@ -147,6 +164,20 @@ const PropertyListing = () => {
     if (id) {
       fetchProperty();
     }
+    
+    // Cleanup function
+    return () => {
+      mapInitializedRef.current = false;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current = null;
+      }
+      if (markerRef.current) {
+        markerRef.current = null;
+      }
+      if (placesServiceRef.current) {
+        placesServiceRef.current = null;
+      }
+    };
   }, [id]);
 
   // Helper function to format price
@@ -233,17 +264,64 @@ const PropertyListing = () => {
 
   // Initialize map when property is loaded
   useEffect(() => {
-    if (property) {
-      loadGoogleMaps(GOOGLE_MAPS_API_KEY)
-        .then(() => {
-          initializeMap();
-        })
-        .catch((error) => {
-          console.error('Failed to load Google Maps:', error);
-          setAmenitiesError('Failed to load map. Please try again later.');
-        });
+    if (property && !mapInitializedRef.current) {
+      // Add a small delay to ensure the DOM is ready
+      const timer = setTimeout(() => {
+        loadGoogleMaps(GOOGLE_MAPS_API_KEY)
+          .then(() => {
+            // Always geocode the address to get the most accurate coordinates
+            // This ensures the map shows the correct location regardless of what's stored in the database
+            geocodeAddress(property.location.address)
+              .then((coordinates) => {
+                if (coordinates) {
+                  // Always update the coordinates with the geocoded result
+                  // This ensures the map shows the correct location
+                  setProperty(prev => ({
+                    ...prev,
+                    location: {
+                      ...prev.location,
+                      lat: coordinates.lat,
+                      lng: coordinates.lng
+                    }
+                  }));
+                  
+                  // Initialize map with the accurate coordinates immediately
+                  initializeMap(0, coordinates);
+                } else {
+                  // If geocoding fails, try with existing coordinates
+                  initializeMap(0, { lat: property.location.lat, lng: property.location.lng });
+                }
+              })
+              .catch((error) => {
+                console.error('Geocoding failed:', error);
+                // If geocoding fails, still try to initialize with existing coordinates
+                // But first, try to use default Singapore coordinates if current ones are invalid
+                if (!property.location.lat || !property.location.lng || 
+                    property.location.lat === 0 || property.location.lng === 0) {
+                  const fallbackCoords = { lat: 1.3521, lng: 103.8198 };
+                  setProperty(prev => ({
+                    ...prev,
+                    location: {
+                      ...prev.location,
+                      lat: fallbackCoords.lat,
+                      lng: fallbackCoords.lng
+                    }
+                  }));
+                  initializeMap(0, fallbackCoords);
+                } else {
+                  initializeMap(0, { lat: property.location.lat, lng: property.location.lng });
+                }
+              });
+          })
+          .catch((error) => {
+            console.error('Failed to load Google Maps:', error);
+            setAmenitiesError('Failed to load map. Please try again later.');
+          });
+      }, 100); // 100ms delay
+
+      return () => clearTimeout(timer);
     }
-  }, [property]);
+  }, [property?.id]); // Only depend on property ID, not the entire property object
 
   // Refetch amenities when selected types change
   useEffect(() => {
@@ -252,49 +330,161 @@ const PropertyListing = () => {
     }
   }, [selectedAmenityTypes, property]);
 
+  // Geocode address to get coordinates
+  const geocodeAddress = (address) => {
+    return new Promise((resolve, reject) => {
+      if (!window.google || !window.google.maps) {
+        reject(new Error('Google Maps not loaded'));
+        return;
+      }
+
+      const geocoder = new window.google.maps.Geocoder();
+      
+      // Clean and normalize the address
+      const cleanAddress = address ? address.trim() : '';
+      if (!cleanAddress) {
+        reject(new Error('No address provided'));
+        return;
+      }
+
+      // Try multiple variations of the address for better results
+      const addressVariations = [
+        cleanAddress,
+        `${cleanAddress}, Singapore`,
+        cleanAddress.replace(/, Singapore$/, '') + ', Singapore',
+        cleanAddress.replace(/, Singapore Singapore$/, ', Singapore'), // Handle double Singapore
+        cleanAddress.replace(/Singapore Singapore/, 'Singapore'), // Handle double Singapore without comma
+        cleanAddress.replace(/, Singapore Singapore Singapore$/, ', Singapore'), // Handle triple Singapore
+        cleanAddress.replace(/Singapore Singapore Singapore/, 'Singapore'), // Handle triple Singapore without comma
+        // Try without postal code
+        cleanAddress.replace(/\s+\d{6}$/, ''), // Remove 6-digit postal code
+        cleanAddress.replace(/\s+\d{6}$/, '') + ', Singapore', // Remove postal code and add Singapore
+        // Try with just the street name
+        cleanAddress.split(',')[0], // Just the street address part
+        cleanAddress.split(',')[0] + ', Singapore', // Street address + Singapore
+        // Try with different formatting
+        cleanAddress.replace(/\s+/g, ' ').trim(), // Normalize spaces
+        cleanAddress.replace(/\s+/g, ' ').trim() + ', Singapore' // Normalize spaces + Singapore
+      ];
+
+      // Remove duplicates
+      const uniqueVariations = [...new Set(addressVariations)];
+
+      let attempts = 0;
+      const maxAttempts = uniqueVariations.length;
+
+      const tryGeocode = (addressToTry) => {
+        geocoder.geocode({ 
+          address: addressToTry,
+          componentRestrictions: { country: 'SG' } // Restrict to Singapore
+        }, (results, status) => {
+          attempts++;
+          
+          if (status === 'OK' && results && results.length > 0) {
+            const location = results[0].geometry.location;
+            const formattedAddress = results[0].formatted_address;
+            resolve({
+              lat: location.lat(),
+              lng: location.lng(),
+              formatted_address: formattedAddress
+            });
+          } else if (attempts < maxAttempts) {
+            // Try next variation
+            tryGeocode(uniqueVariations[attempts]);
+            } else {
+              // Try one final attempt without country restriction
+              geocoder.geocode({ 
+                address: cleanAddress
+              }, (results, status) => {
+                if (status === 'OK' && results && results.length > 0) {
+                  const location = results[0].geometry.location;
+                  const formattedAddress = results[0].formatted_address;
+                  resolve({
+                    lat: location.lat(),
+                    lng: location.lng(),
+                    formatted_address: formattedAddress
+                  });
+                } else {
+                  reject(new Error(`Geocoding failed for all variations of: ${address}. Last status: ${status}`));
+                }
+              });
+            }
+        });
+      };
+
+      // Start with the first variation
+      tryGeocode(uniqueVariations[0]);
+    });
+  };
+
   // Initialize Google Map
-  const initializeMap = () => {
+  const initializeMap = (retryCount = 0, customCoordinates = null) => {
     if (!window.google || !property) return;
 
     const mapElement = document.getElementById('property-listing-map');
-    if (!mapElement) return;
-
-    const center = { lat: property.location.lat, lng: property.location.lng };
-
-    const map = new window.google.maps.Map(mapElement, {
-      center: center,
-      zoom: 16,
-      mapTypeId: window.google.maps.MapTypeId.ROADMAP,
-      styles: [
-        {
-          featureType: 'poi',
-          elementType: 'labels',
-          stylers: [{ visibility: 'off' }]
-        }
-      ]
-    });
-
-    mapInstanceRef.current = map;
-
-    // Add marker for the property
-    const marker = new window.google.maps.Marker({
-      position: center,
-      map: map,
-      title: property.title,
-      icon: {
-        url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-        scaledSize: new window.google.maps.Size(32, 32)
+    if (!mapElement) {
+      console.error('Map element not found, retry count:', retryCount);
+      if (retryCount < 3) {
+        // Retry after a short delay
+        setTimeout(() => initializeMap(retryCount + 1, customCoordinates), 500);
+      } else {
+        setAmenitiesError('Map container not found. Please refresh the page.');
       }
-    });
+      return;
+    }
 
-    markerRef.current = marker;
+    // Use custom coordinates if provided, otherwise use property coordinates
+    const center = customCoordinates || { lat: property.location.lat, lng: property.location.lng };
+    
+    // Validate coordinates
+    if (isNaN(center.lat) || isNaN(center.lng)) {
+      console.error('Invalid coordinates:', center);
+      setAmenitiesError('Invalid property location coordinates');
+      return;
+    }
 
-    // Initialize Places service for amenities
-    const placesService = new window.google.maps.places.PlacesService(map);
-    placesServiceRef.current = placesService;
+    try {
+      const map = new window.google.maps.Map(mapElement, {
+        center: center,
+        zoom: 16,
+        mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+        styles: [
+          {
+            featureType: 'poi',
+            elementType: 'labels',
+            stylers: [{ visibility: 'off' }]
+          }
+        ]
+      });
 
-    // Load amenities for the property location
-    fetchAmenities(center);
+      mapInstanceRef.current = map;
+      mapInitializedRef.current = true; // Mark map as initialized
+      console.log('Map initialized successfully at:', center);
+
+      // Add marker for the property
+      const marker = new window.google.maps.Marker({
+        position: center,
+        map: map,
+        title: property.title,
+        icon: {
+          url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+          scaledSize: new window.google.maps.Size(32, 32)
+        }
+      });
+
+      markerRef.current = marker;
+      console.log('Marker added successfully');
+
+      // Initialize Places service for amenities
+      const placesService = new window.google.maps.places.PlacesService(map);
+      placesServiceRef.current = placesService;
+
+      // Load amenities for the property location
+      fetchAmenities(center);
+    } catch (error) {
+      console.error('Error initializing map:', error);
+      setAmenitiesError('Failed to initialize map. Please try again later.');
+    }
   };
 
   // Fetch nearby amenities
@@ -619,11 +809,9 @@ const PropertyListing = () => {
             <h2 className="property-listing-section-title">Contact Agent</h2>
             <div className="property-listing-agent-card">
               <div className="property-listing-agent-info">
-                <img 
-                  src={property.agent.image} 
-                  alt={property.agent.name}
-                  className="property-listing-agent-image"
-                />
+                <div className="property-listing-agent-initials">
+                  {getAgentInitials(property.agent.name)}
+                </div>
                 <div className="property-listing-agent-details">
                   <h3 className="property-listing-agent-name">{property.agent.name}</h3>
                   <p className="property-listing-agent-title">{property.agent.title}</p>

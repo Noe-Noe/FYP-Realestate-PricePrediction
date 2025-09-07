@@ -1,29 +1,43 @@
 const API_BASE_URL = 'http://localhost:5000/api';
 
 // Helper function for API calls
-const apiCall = async (endpoint, options = {}) => {
+const apiCall = async (endpoint, method = 'GET', data = null) => {
   const url = `${API_BASE_URL}${endpoint}`;
   
   // Get JWT token from localStorage
   const token = localStorage.getItem('accessToken');
   
-  const defaultOptions = {
+  const options = {
+    method: method,
     headers: {
       'Content-Type': 'application/json',
       // Add Authorization header if token exists
       ...(token && { 'Authorization': `Bearer ${token}` }),
     },
-    ...options,
   };
+  
+  // Add body for non-GET requests
+  if (data && method !== 'GET') {
+    options.body = JSON.stringify(data);
+  }
 
   try {
-    const response = await fetch(url, defaultOptions);
-    const data = await response.json();
+    const response = await fetch(url, options);
     
     if (!response.ok) {
-      throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      // Try to get error message from response
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (jsonError) {
+        // If response is not JSON (like HTML error page), use status text
+        errorMessage = response.statusText || errorMessage;
+      }
+      throw new Error(errorMessage);
     }
     
+    const data = await response.json();
     return data;
   } catch (error) {
     console.error('API call failed:', error);
@@ -35,50 +49,32 @@ const apiCall = async (endpoint, options = {}) => {
 export const authAPI = {
   // User registration
   register: async (userData) => {
-    return apiCall('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
+    return apiCall('/auth/register', 'POST', userData);
   },
 
   // User login
   login: async (credentials) => {
-    return apiCall('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
+    return apiCall('/auth/login', 'POST', credentials);
   },
 
   // Send OTP for email verification
   sendOTP: async (email) => {
-    return apiCall('/auth/send-otp', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    });
+    return apiCall('/auth/send-otp', 'POST', { email });
   },
 
   // Verify OTP
   verifyOTP: async (email, otp) => {
-    return apiCall('/auth/verify-otp', {
-      method: 'POST',
-      body: JSON.stringify({ email, otp }),
-    });
+    return apiCall('/auth/verify-otp', 'POST', { email, otp });
   },
 
   // Forgot password - send recovery OTP
   forgotPassword: async (email) => {
-    return apiCall('/auth/forgot-password', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    });
+    return apiCall('/auth/forgot-password', 'POST', { email });
   },
 
   // Reset password with OTP
   resetPassword: async (email, otp, newPassword) => {
-    return apiCall('/auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ email, otp, new_password: newPassword }),
-    });
+    return apiCall('/auth/reset-password', 'POST', { email, otp, new_password: newPassword });
   },
 
   // Get user profile
@@ -122,46 +118,37 @@ export const authAPI = {
 
   // Update user profile
   updateProfile: async (profileData) => {
-    return apiCall('/auth/profile', {
-      method: 'PUT',
-      body: JSON.stringify(profileData),
-    });
+    return apiCall('/auth/profile', 'PUT', profileData);
   },
 
   // Change password
   changePassword: async (currentPassword, newPassword) => {
-    return apiCall('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
-    });
+    return apiCall('/auth/change-password', 'POST', { current_password: currentPassword, new_password: newPassword });
   },
 
   // Delete account
   deleteAccount: async () => {
-    return apiCall('/auth/deactivate', {
-      method: 'POST',
-    });
+    return apiCall('/auth/deactivate', 'POST');
   },
 
-  // Deactivate own account
+  // Deactivate own account (soft delete)
   deactivateOwnAccount: async () => {
-    return apiCall('/user/deactivate', {
-      method: 'POST',
-    });
+    return apiCall('/user/deactivate', 'POST');
+  },
+
+  // Delete own account completely (hard delete)
+  deleteOwnAccount: async () => {
+    return apiCall('/user/delete-account', 'POST');
   },
 
   // Upgrade to Premium
   upgradeToPremium: async () => {
-    return apiCall('/auth/upgrade-to-premium', {
-      method: 'POST',
-    });
+    return apiCall('/auth/upgrade-to-premium', 'POST');
   },
 
   // Downgrade to Free
   downgradeToFree: async () => {
-    return apiCall('/auth/downgrade-to-free', {
-      method: 'POST',
-    });
+    return apiCall('/auth/downgrade-to-free', 'POST');
   },
 
   // Get user properties and recommendations
@@ -176,10 +163,7 @@ export const authAPI = {
 
   // Submit new feedback/review
   submitFeedback: async (feedbackData) => {
-    return apiCall('/feedback/submit', {
-      method: 'POST',
-      body: JSON.stringify(feedbackData),
-    });
+    return apiCall('/feedback/submit', 'POST', feedbackData);
   },
 
   // Get current user's reviews
@@ -189,18 +173,12 @@ export const authAPI = {
 
   // Like a review
   likeReview: async (reviewId) => {
-    return apiCall('/feedback/like', {
-      method: 'POST',
-      body: JSON.stringify({ review_id: reviewId }),
-    });
+    return apiCall('/feedback/like', 'POST', { review_id: reviewId });
   },
 
   // Dislike a review
   dislikeReview: async (reviewId) => {
-    return apiCall('/feedback/dislike', {
-      method: 'POST',
-      body: JSON.stringify({ review_id: reviewId }),
-    });
+    return apiCall('/feedback/dislike', 'POST', { review_id: reviewId });
   },
 
   // Get user's interaction state for reviews
@@ -229,69 +207,55 @@ export const authAPI = {
       ...bookmarkData
     };
     
-    return apiCall('/bookmarks', {
-      method: 'POST',
-      body: JSON.stringify(defaultData),
-    });
+    return apiCall('/bookmarks', 'POST', defaultData);
   },
 
   // Helper method to create property bookmark
   bookmarkProperty: async (propertyId, propertyData) => {
-    return apiCall('/bookmarks', {
-      method: 'POST',
-      body: JSON.stringify({
-        bookmark_type: 'property',
-        reference_id: propertyId,
-        address: propertyData.address,
-        floor_area: propertyData.floor_area,
-        level: propertyData.level,
-        unit_number: propertyData.unit_number,
-        property_type: propertyData.property_type
-      }),
+    return apiCall('/bookmarks', 'POST', {
+      bookmark_type: 'property',
+      reference_id: propertyId,
+      address: propertyData.address,
+      floor_area: propertyData.floor_area,
+      level: propertyData.level,
+      unit_number: propertyData.unit_number,
+      property_type: propertyData.property_type
     });
   },
 
   // Helper method to create prediction bookmark
   bookmarkPrediction: async (predictionId, predictionData) => {
-    return apiCall('/bookmarks', {
-      method: 'POST',
-      body: JSON.stringify({
-        bookmark_type: 'prediction',
-        reference_id: predictionId,
-        address: predictionData.address,
-        floor_area: predictionData.floor_area,
-        level: predictionData.level,
-        unit_number: predictionData.unit_number,
-        property_type: predictionData.property_type
-      }),
+    return apiCall('/bookmarks', 'POST', {
+      bookmark_type: 'prediction',
+      reference_id: predictionId,
+      address: predictionData.address,
+      floor_area: predictionData.floor_area,
+      level: predictionData.level,
+      unit_number: predictionData.unit_number,
+      property_type: predictionData.property_type
     });
   },
 
   // Helper method to create comparison bookmark
   bookmarkComparison: async (comparisonId, comparisonData) => {
-    return apiCall('/bookmarks', {
-      method: 'POST',
-      body: JSON.stringify({
-        bookmark_type: 'comparison',
-        reference_id: comparisonId,
-        address: comparisonData.address1,
-        floor_area: comparisonData.floor_area1,
-        level: comparisonData.level1,
-        unit_number: comparisonData.unit_number1,
-        property_type: comparisonData.property_type1,
-        address_2: comparisonData.address2,
-        floor_area_2: comparisonData.floor_area2,
-        level_2: comparisonData.level2,
-        unit_number_2: comparisonData.unit_number2,
-        property_type_2: comparisonData.property_type2
-      }),
+    return apiCall('/bookmarks', 'POST', {
+      bookmark_type: 'comparison',
+      reference_id: comparisonId,
+      address: comparisonData.address1,
+      floor_area: comparisonData.floor_area1,
+      level: comparisonData.level1,
+      unit_number: comparisonData.unit_number1,
+      property_type: comparisonData.property_type1,
+      address_2: comparisonData.address2,
+      floor_area_2: comparisonData.floor_area2,
+      level_2: comparisonData.level2,
+      unit_number_2: comparisonData.unit_number2,
+      property_type_2: comparisonData.property_type2
     });
   },
 
   deleteBookmark: async (bookmarkId) => {
-    return apiCall(`/bookmarks/${bookmarkId}`, {
-      method: 'DELETE',
-    });
+    return apiCall(`/bookmarks/${bookmarkId}`, 'DELETE');
   },
 
   // Admin Dashboard API calls
@@ -308,21 +272,20 @@ export const authAPI = {
   },
 
   deactivateUser: async (userId) => {
-    return apiCall(`/admin/users/${userId}/deactivate`, {
-      method: 'POST',
-    });
+    return apiCall(`/admin/users/${userId}/deactivate`, 'POST');
   },
 
   suspendUser: async (userId) => {
-    return apiCall(`/admin/users/${userId}/suspend`, {
-      method: 'POST',
-    });
+    return apiCall(`/admin/users/${userId}/suspend`, 'POST');
   },
 
   reactivateUser: async (userId) => {
-    return apiCall(`/admin/users/${userId}/reactivate`, {
-      method: 'POST',
-    });
+    return apiCall(`/admin/users/${userId}/reactivate`, 'POST');
+  },
+
+  // Delete user completely (hard delete)
+  deleteUser: async (userId) => {
+    return apiCall(`/admin/users/${userId}/delete`, 'DELETE');
   },
 
   getAllFeedback: async (page = 1, perPage = 20) => {
@@ -330,36 +293,25 @@ export const authAPI = {
   },
 
   verifyFeedback: async (feedbackId) => {
-    return apiCall('/admin/feedback/verify', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        feedback_id: feedbackId
-      }),
+    return apiCall('/admin/feedback/verify', 'POST', { 
+      feedback_id: feedbackId
     });
   },
 
   respondToFeedback: async (feedbackId, adminResponse) => {
-    return apiCall('/admin/feedback/respond', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        feedback_id: feedbackId,
-        admin_response: adminResponse
-      }),
+    return apiCall('/admin/feedback/respond', 'POST', { 
+      feedback_id: feedbackId,
+      admin_response: adminResponse
     });
   },
 
   getFeedbackById: async (feedbackId) => {
-    return apiCall(`/admin/feedback/${feedbackId}`, {
-      method: 'GET',
-    });
+    return apiCall(`/admin/feedback/${feedbackId}`);
   },
 
   unverifyFeedback: async (feedbackId) => {
-    return apiCall('/admin/feedback/unverify', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        feedback_id: feedbackId
-      }),
+    return apiCall('/admin/feedback/unverify', 'POST', { 
+      feedback_id: feedbackId
     });
   },
 };
@@ -389,18 +341,12 @@ export const propertiesAPI = {
 
   // Get nearby properties for comparison/prediction
   getNearbyProperties: async (address, limit = 10, propertyType = null) => {
-    return apiCall('/properties/nearby', {
-      method: 'POST',
-      body: JSON.stringify({ address, limit, propertyType }),
-    });
+    return apiCall('/properties/nearby', 'POST', { address, limit, propertyType });
   },
 
   // Get agents assigned to a specific region
   getAgentsByRegion: async (address) => {
-    return apiCall('/agents/region', {
-      method: 'POST',
-      body: JSON.stringify({ address }),
-    });
+    return apiCall('/agents/region', 'POST', { address });
   },
 
 
@@ -408,9 +354,20 @@ export const propertiesAPI = {
 
 // FAQ API calls
 export const faqAPI = {
-  // Get all FAQ entries
+  // FAQ Section
+  getSection: () => apiCall('/faq/section'),
+  updateSection: (sectionData) => apiCall('/faq/section', 'PUT', sectionData),
+  
+  // FAQ Entries
+  getEntries: () => apiCall('/faq/entries'),
+  getEntry: (faqId) => apiCall(`/faq/entries/${faqId}`),
+  createEntry: (faqData) => apiCall('/faq/entries', 'POST', faqData),
+  updateEntry: (faqId, faqData) => apiCall(`/faq/entries/${faqId}`, 'PUT', faqData),
+  deleteEntry: (faqId) => apiCall(`/faq/entries/${faqId}`, 'DELETE'),
+  
+  // Legacy method for backward compatibility
   getAll: async () => {
-    return apiCall('/faq');
+    return apiCall('/support/faq');
   },
 };
 
@@ -422,14 +379,249 @@ export const contentAPI = {
   },
 };
 
+// Support API calls
+export const supportAPI = {
+  // Get FAQ entries
+  getFAQ: async () => {
+    return apiCall('/support/faq');
+  },
+
+  // Get contact information
+  getContact: async () => {
+    return apiCall('/support/contact');
+  },
+
+  // Get legal content
+  getLegal: async () => {
+    return apiCall('/support/legal');
+  },
+
+  // Get specific legal content
+  getLegalContent: async (contentType) => {
+    return apiCall(`/support/legal/${contentType}`);
+  },
+};
+
+// Hero API calls
+export const heroAPI = {
+  // Get hero content
+  getContent: async () => {
+    return apiCall('/hero/content');
+  },
+
+  // Get specific hero section content
+  getContentBySection: async (sectionName) => {
+    return apiCall(`/hero/content/${sectionName}`);
+  },
+
+  // Upload hero background image
+  uploadBackground: async (file) => {
+    const url = `${API_BASE_URL}/hero/upload-background`;
+    const token = localStorage.getItem('accessToken');
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const options = {
+      method: 'POST',
+      body: formData,
+      headers: {
+        // Don't set Content-Type for FormData, let the browser set it with boundary
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    };
+
+    try {
+      const response = await fetch(url, options);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('API call failed:', error);
+      throw error;
+    }
+  },
+
+  // Upload hero marketing video
+  uploadVideo: async (file) => {
+    const url = `${API_BASE_URL}/hero/upload-video`;
+    const token = localStorage.getItem('accessToken');
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const options = {
+      method: 'POST',
+      body: formData,
+      headers: {
+        // Don't set Content-Type for FormData, let the browser set it with boundary
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    };
+
+    try {
+      const response = await fetch(url, options);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('API call failed:', error);
+      throw error;
+    }
+  },
+
+  // Update hero content
+  updateContent: async (contentData) => {
+    return apiCall('/hero/update-content', 'POST', contentData);
+  },
+};
+
+// HowItWorks API calls
+export const howitworksAPI = {
+  // Get all HowItWorks properties
+  getProperties: async () => {
+    return apiCall('/howitworks/properties');
+  },
+
+  // Get specific HowItWorks property
+  getProperty: async (propertyId) => {
+    return apiCall(`/howitworks/properties/${propertyId}`);
+  },
+
+  // Update HowItWorks property
+  updateProperty: async (propertyId, propertyData) => {
+    return apiCall(`/howitworks/properties/${propertyId}`, 'PUT', propertyData);
+  },
+};
+
+// Features API calls
+export const featuresAPI = {
+  // Get all features steps
+  getSteps: async () => {
+    return apiCall('/features/steps');
+  },
+
+  // Get specific features step
+  getStep: async (stepId) => {
+    return apiCall(`/features/steps/${stepId}`);
+  },
+
+  // Update features step
+  updateStep: async (stepId, stepData) => {
+    return apiCall(`/features/steps/${stepId}`, 'PUT', stepData);
+  },
+
+  // Create features step
+  createStep: async (stepData) => {
+    return apiCall('/features/steps', 'POST', stepData);
+  },
+
+  // Delete features step
+  deleteStep: async (stepId) => {
+    return apiCall(`/features/steps/${stepId}`, 'DELETE');
+  },
+
+  // Get features section title
+  getSectionTitle: async () => {
+    return apiCall('/features/section-title');
+  },
+
+  // Update features section title
+  updateSectionTitle: async (sectionTitle) => {
+    return apiCall('/features/section-title', 'PUT', { section_title: sectionTitle });
+  },
+};
+
+// Team API calls
+export const teamAPI = {
+  // Get team section details
+  getSection: async () => {
+    return apiCall('/team/section');
+  },
+
+  // Update team section details
+  updateSection: async (sectionData) => {
+    return apiCall('/team/section', 'PUT', sectionData);
+  },
+
+  // Get all team members
+  getMembers: async () => {
+    return apiCall('/team/members');
+  },
+
+  // Get specific team member
+  getMember: async (memberId) => {
+    return apiCall(`/team/members/${memberId}`);
+  },
+
+  // Create team member
+  createMember: async (memberData) => {
+    return apiCall('/team/members', 'POST', memberData);
+  },
+
+  // Update team member
+  updateMember: async (memberId, memberData) => {
+    return apiCall(`/team/members/${memberId}`, 'PUT', memberData);
+  },
+
+  // Delete team member
+  deleteMember: async (memberId) => {
+    return apiCall(`/team/members/${memberId}`, 'DELETE');
+  },
+
+  // Upload team member profile picture
+  uploadProfilePicture: async (file) => {
+    const formData = new FormData();
+    formData.append('profile_picture', file);
+    
+    // Get token for manual request since we need to override Content-Type
+    const token = localStorage.getItem('accessToken');
+    
+    const response = await fetch(`${API_BASE_URL}/team/members/upload-profile-picture`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        // Don't set Content-Type - let browser set it with boundary
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || `HTTP error! status: ${response.status}`);
+    }
+    
+    return data;
+  },
+};
+
+// Contact Information API calls
+export const contactAPI = {
+  // Get contact information
+  getInfo: async () => {
+    return apiCall('/contact/info');
+  },
+
+  // Update contact information
+  updateInfo: async (contactData) => {
+    return apiCall('/contact/info', 'PUT', contactData);
+  },
+};
+
 // Price Prediction API calls
 export const predictionAPI = {
   // Create price prediction
   create: async (predictionData) => {
-    return apiCall('/predictions', {
-      method: 'POST',
-      body: JSON.stringify(predictionData),
-    });
+    return apiCall('/predictions', 'POST', predictionData);
   },
 
   // Get user predictions
@@ -447,17 +639,12 @@ export const bookmarksAPI = {
 
   // Create a new bookmark
   create: async (bookmarkData) => {
-    return apiCall('/bookmarks', {
-      method: 'POST',
-      body: JSON.stringify(bookmarkData),
-    });
+    return apiCall('/bookmarks', 'POST', bookmarkData);
   },
 
   // Delete a bookmark
   delete: async (bookmarkId) => {
-    return apiCall(`/bookmarks/${bookmarkId}`, {
-      method: 'DELETE',
-    });
+    return apiCall(`/bookmarks/${bookmarkId}`, 'DELETE');
   },
 
   // Check if a bookmark exists
@@ -476,26 +663,23 @@ export const bookmarksAPI = {
 // Onboarding API calls
 export const onboardingAPI = {
   completeUser: async () => {
-    return apiCall('/onboarding/complete', {
-      method: 'POST',
-    });
+    return apiCall('/onboarding/complete', 'POST');
   },
 
   completeAgent: async () => {
-    return apiCall('/onboarding/complete-agent', {
-      method: 'POST',
-    });
+    return apiCall('/onboarding/complete-agent', 'POST');
   },
 
   checkAgentStatus: async () => {
     return apiCall('/onboarding/agent-status');
   },
 
+  checkUserStatus: async () => {
+    return apiCall('/onboarding/user-status');
+  },
+
   saveUserPreferences: async (preferences) => {
-    return apiCall('/onboarding/save-preferences', {
-      method: 'POST',
-      body: JSON.stringify(preferences),
-    });
+    return apiCall('/onboarding/save-preferences', 'POST', preferences);
   },
 
   getUserRecommendations: async () => {
@@ -521,10 +705,7 @@ export const agentAPI = {
 
   // Update agent's assigned regions
   updateAssignedRegions: async (regions) => {
-    return apiCall('/agent/regions', {
-      method: 'POST',
-      body: JSON.stringify({ regions }),
-    });
+    return apiCall('/agent/regions', 'POST', { regions });
   },
 
   // Get agent's recent activity
@@ -544,25 +725,17 @@ export const agentAPI = {
 
   // Create new property listing
   createProperty: async (propertyData) => {
-    return apiCall('/properties/agent', {
-      method: 'POST',
-      body: JSON.stringify(propertyData),
-    });
+    return apiCall('/properties/agent', 'POST', propertyData);
   },
 
   // Update property listing
   updateProperty: async (propertyId, propertyData) => {
-    return apiCall(`/properties/agent/${propertyId}`, {
-      method: 'PUT',
-      body: JSON.stringify(propertyData),
-    });
+    return apiCall(`/properties/agent/${propertyId}`, 'PUT', propertyData);
   },
 
   // Delete property listing
   deleteProperty: async (propertyId) => {
-    return apiCall(`/properties/agent/${propertyId}`, {
-      method: 'DELETE',
-    });
+    return apiCall(`/properties/agent/${propertyId}`, 'DELETE');
   },
 
   // Upload property images
@@ -596,13 +769,58 @@ export const agentAPI = {
 };
 
 // Export the main API object
+// Legal Content API
+export const legalAPI = {
+  getContent: (contentType) => apiCall(`/legal/${contentType}`),
+  updateContent: (contentType, contentData) => apiCall(`/legal/${contentType}`, 'PUT', contentData),
+  getAllContent: () => apiCall('/legal/all'),
+};
+
+// Reviews API
+export const reviewsAPI = {
+  getVerifiedReviews: () => apiCall('/reviews/verified'),
+};
+
+// Subscription Plans API
+export const subscriptionPlansAPI = {
+  getAll: () => apiCall('/subscription-plans'),
+  getById: (id) => apiCall(`/subscription-plans/${id}`),
+  // Admin endpoints
+  admin: {
+    create: (data) => apiCall('/admin/subscription-plans', 'POST', data),
+    update: (id, data) => apiCall(`/admin/subscription-plans/${id}`, 'PUT', data),
+    delete: (id) => apiCall(`/admin/subscription-plans/${id}`, 'DELETE'),
+  }
+};
+
+// Important Features API
+export const importantFeaturesAPI = {
+  getAll: () => apiCall('/important-features'),
+  // Admin endpoints
+  admin: {
+    create: (data) => apiCall('/admin/important-features', 'POST', data),
+    update: (id, data) => apiCall(`/admin/important-features/${id}`, 'PUT', data),
+    delete: (id) => apiCall(`/admin/important-features/${id}`, 'DELETE'),
+  }
+};
+
 export default {
   auth: authAPI,
   properties: propertiesAPI,
   faq: faqAPI,
   content: contentAPI,
+  support: supportAPI,
+  hero: heroAPI,
+  howitworks: howitworksAPI,
+  features: featuresAPI,
+  team: teamAPI,
+  contact: contactAPI,
   prediction: predictionAPI,
   bookmarks: bookmarksAPI,
   onboarding: onboardingAPI,
   agent: agentAPI,
+  legal: legalAPI,
+  reviews: reviewsAPI,
+  subscriptionPlans: subscriptionPlansAPI,
+  importantFeatures: importantFeaturesAPI,
 };

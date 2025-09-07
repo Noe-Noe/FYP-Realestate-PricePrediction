@@ -195,6 +195,14 @@ CREATE TABLE content_versions (
     FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
+-- FAQ section
+CREATE TABLE IF NOT EXISTS faq_section (
+    id SERIAL PRIMARY KEY,
+    section_title VARCHAR(255) NOT NULL DEFAULT 'Frequently Asked Questions',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- FAQ entries
 CREATE TABLE faq_entries (
     id SERIAL PRIMARY KEY,
@@ -202,6 +210,29 @@ CREATE TABLE faq_entries (
     answer TEXT NOT NULL,
     category VARCHAR(100),
     display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- support contact info
+CREATE TABLE IF NOT EXISTS support_contact_info (
+    id SERIAL PRIMARY KEY,
+    contact_type VARCHAR(50) NOT NULL,
+    contact_value VARCHAR(255) NOT NULL,
+    display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- legal content
+CREATE TABLE IF NOT EXISTS legal_content (
+    id SERIAL PRIMARY KEY,
+    content_type VARCHAR(50) CHECK (content_type IN ('disclaimer', 'privacy_policy', 'terms_of_use')) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    version VARCHAR(20) DEFAULT '1.0',
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -264,6 +295,73 @@ CREATE TABLE business_inquiries (
     FOREIGN KEY (assigned_to) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS hero_content (
+    id SERIAL PRIMARY KEY,
+    section_name VARCHAR(100) UNIQUE NOT NULL,
+    headline TEXT NOT NULL,
+    subheading TEXT NOT NULL,
+    hero_background_url VARCHAR(500),
+    marketing_video_url VARCHAR(500),
+    button_text VARCHAR(100) NOT NULL,
+    button_url VARCHAR(500) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
+CREATE TABLE IF NOT EXISTS howitworks_properties (
+    id SERIAL PRIMARY KEY,
+    property_order INTEGER NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    address VARCHAR(500) NOT NULL,
+    level VARCHAR(100),
+    unit_area VARCHAR(100),
+    property_type VARCHAR(100) NOT NULL,
+    image_url VARCHAR(500),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS features_section (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    section_title VARCHAR(255) NOT NULL DEFAULT 'How it Works',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS features_steps (
+    id SERIAL PRIMARY KEY,
+    step_number INTEGER NOT NULL,
+    step_title VARCHAR(255) NOT NULL,
+    step_description TEXT NOT NULL,
+    step_image VARCHAR(500),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS team_section (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    section_title VARCHAR(255) NOT NULL DEFAULT 'Our Team',
+    section_subtitle TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    role VARCHAR(255) NOT NULL,
+    description TEXT,
+    image_url VARCHAR(500), -- Stores file path to uploaded image in backend/admin/team/
+    social_links JSONB,
+    display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- System logs
 CREATE TABLE system_logs (
     id SERIAL PRIMARY KEY,
@@ -274,6 +372,45 @@ CREATE TABLE system_logs (
     user_agent TEXT,
     log_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Subscription Plans
+CREATE TABLE subscription_plans (
+    id SERIAL PRIMARY KEY,
+    plan_name VARCHAR(100) NOT NULL,
+    plan_type VARCHAR(20) CHECK (plan_type IN ('free', 'premium', 'agent')) NOT NULL,
+    monthly_price DECIMAL(10,2) DEFAULT 0.00,
+    yearly_price DECIMAL(10,2) DEFAULT 0.00,
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_popular BOOLEAN DEFAULT FALSE,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Subscription Plan Features
+CREATE TABLE subscription_plan_features (
+    id SERIAL PRIMARY KEY,
+    plan_id INTEGER NOT NULL,
+    feature_name VARCHAR(255) NOT NULL,
+    feature_description TEXT,
+    is_included BOOLEAN DEFAULT TRUE,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE CASCADE
+);
+
+-- Important Features for Comparison
+CREATE TABLE important_features (
+    id SERIAL PRIMARY KEY,
+    feature_name VARCHAR(255) NOT NULL,
+    feature_description TEXT,
+    display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- User sessions
@@ -336,3 +473,6 @@ CREATE TRIGGER update_faq_entries_updated_at BEFORE UPDATE ON faq_entries
 
 CREATE TRIGGER update_business_inquiries_updated_at BEFORE UPDATE ON business_inquiries
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Update team_members.image_url to TEXT to support base64 data URLs
+ALTER TABLE team_members ALTER COLUMN image_url TYPE TEXT;

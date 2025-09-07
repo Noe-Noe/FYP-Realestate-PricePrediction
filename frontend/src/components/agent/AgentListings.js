@@ -78,6 +78,13 @@ const AgentListings = () => {
   const handleRemove = async (listingId) => {
     console.log('Remove function called with ID:', listingId);
     
+    // Check authentication
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      alert('You must be logged in to delete listings.');
+      return;
+    }
+    
     // Find the listing to get its address for confirmation
     const listingToRemove = listingsData.find(listing => listing.id === listingId);
     
@@ -104,8 +111,10 @@ const AgentListings = () => {
       setRemovingListingId(listingId);
       
       try {
+        console.log('Calling deleteProperty API with ID:', listingId);
         // Call the API to delete the property
-        await agentAPI.deleteProperty(listingId);
+        const response = await agentAPI.deleteProperty(listingId);
+        console.log('Delete API response:', response);
         
         // Remove the listing from state
         setListingsData(prevListings => {
@@ -125,7 +134,12 @@ const AgentListings = () => {
         
       } catch (error) {
         console.error('Error removing listing:', error);
-        alert('Error removing listing. Please try again.');
+        console.error('Error details:', {
+          message: error.message,
+          response: error.response,
+          status: error.status
+        });
+        alert(`Error removing listing: ${error.message || 'Please try again.'}`);
       } finally {
         // Clear loading state
         setRemovingListingId(null);

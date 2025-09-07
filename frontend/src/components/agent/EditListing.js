@@ -1,31 +1,57 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import { agentAPI } from '../../services/api';
+import { GOOGLE_MAPS_API_KEY } from '../../config/maps';
 import './agent-common.css';
 import './EditListing.css';
+
+const GOOGLE_MAPS_LIBRARIES = ['places'];
+
+function loadGoogleMaps(apiKey) {
+  if (!apiKey) {
+    return Promise.reject(new Error('Missing Google Maps API key'));
+  }
+  if (window.google && window.google.maps) {
+    return Promise.resolve(window.google);
+  }
+  if (window._googleMapsPromise) {
+    return window._googleMapsPromise;
+  }
+  const script = document.createElement('script');
+  const libs = GOOGLE_MAPS_LIBRARIES.join(',');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${libs}`;
+  script.async = true;
+  script.defer = true;
+  window._googleMapsPromise = new Promise((resolve, reject) => {
+    script.onload = () => resolve(window.google);
+    script.onerror = reject;
+  });
+  document.head.appendChild(script);
+  return window._googleMapsPromise;
+}
 
 const EditListing = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('listings');
   const [formData, setFormData] = useState({
-    streetAddress: '123 Main St.',
-    city: 'Anytown',
-    state: 'CA',
-    zipCode: '90210',
-    propertyType: 'Office',
-    size: '5,000',
-    floors: '2',
-    yearBuilt: '2005',
-    zoning: 'Commercial',
-    parkingSpaces: '50',
-    askingPrice: '$1,500,000',
+    streetAddress: '',
+    zipCode: '',
+    latitude: null,
+    longitude: null,
+    propertyType: '',
+    size: '',
+    floors: '',
+    yearBuilt: '',
+    zoning: '',
+    parkingSpaces: '',
+    askingPrice: '',
     priceType: 'sale',
-    description: 'This is a well-maintained commercial property in a prime location with excellent accessibility and modern amenities.',
-    status: 'Active',
+    description: '',
+    status: 'active',
     amenities: {
       hvac: false,
       securitySystem: false,
@@ -51,6 +77,77 @@ const EditListing = () => {
 
   const [newImages, setNewImages] = useState([]);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
+  
+  // Google Maps autocomplete refs
+  const autocompleteRef = useRef(null);
+  const autocompleteInstanceRef = useRef(null);
+
+  // Initialize Google Maps autocomplete
+  useEffect(() => {
+    const initializeAutocomplete = async () => {
+      try {
+        await loadGoogleMaps(GOOGLE_MAPS_API_KEY);
+        
+        if (autocompleteRef.current && window.google) {
+          const autocomplete = new window.google.maps.places.Autocomplete(
+            autocompleteRef.current,
+            {
+              types: ['address'],
+              componentRestrictions: { country: 'sg' }, // Restrict to Singapore
+              fields: ['address_components', 'formatted_address', 'geometry']
+            }
+          );
+
+          autocompleteInstanceRef.current = autocomplete;
+
+          autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            
+            if (place.geometry && place.address_components) {
+              // Parse address components
+              let streetNumber = '';
+              let route = '';
+              let zipCode = '';
+
+              place.address_components.forEach(component => {
+                const types = component.types;
+                
+                if (types.includes('street_number')) {
+                  streetNumber = component.long_name;
+                } else if (types.includes('route')) {
+                  route = component.long_name;
+                } else if (types.includes('postal_code')) {
+                  zipCode = component.long_name;
+                }
+              });
+
+              // Update form data with parsed address and coordinates
+              setFormData(prev => ({
+                ...prev,
+                streetAddress: `${streetNumber} ${route}`.trim(),
+                zipCode: zipCode,
+                latitude: place.geometry.location.lat(),
+                longitude: place.geometry.location.lng()
+              }));
+
+              console.log('Address parsed:', {
+                streetAddress: `${streetNumber} ${route}`.trim(),
+                zipCode,
+                coordinates: {
+                  lat: place.geometry.location.lat(),
+                  lng: place.geometry.location.lng()
+                }
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to initialize Google Maps autocomplete:', error);
+      }
+    };
+
+    initializeAutocomplete();
+  }, []);
 
   // Load existing listing data from API
   useEffect(() => {
@@ -84,9 +181,9 @@ const EditListing = () => {
           // Update form data with the loaded listing data
           setFormData({
           streetAddress: listingData.street_address || listingData.address || '',
-            city: listingData.city || '',
-            state: listingData.state || '',
           zipCode: listingData.zip_code || '',
+          latitude: listingData.latitude || null,
+          longitude: listingData.longitude || null,
           propertyType: listingData.property_type || '',
           size: listingData.size_sqft ? listingData.size_sqft.toString() : '',
           floors: listingData.floors ? listingData.floors.toString() : '',
@@ -153,7 +250,7 @@ const EditListing = () => {
         
         console.log('Form data set:', {
           streetAddress: listingData.street_address || listingData.address || '',
-          city: listingData.city || '',
+          zipCode: listingData.zip_code || '',
           propertyType: listingData.property_type || '',
           size: listingData.size_sqft || '',
           askingPrice: listingData.asking_price || '',
@@ -352,8 +449,8 @@ const EditListing = () => {
     e.preventDefault();
     
     // Basic form validation
-    if (!formData.streetAddress || !formData.city || !formData.propertyType || !formData.askingPrice) {
-      alert('Please fill in all required fields: Street Address, City, Property Type, and Asking Price');
+    if (!formData.streetAddress || !formData.propertyType || !formData.askingPrice) {
+      alert('Please fill in all required fields: Street Address, Property Type, and Asking Price');
       return;
     }
     
@@ -368,11 +465,13 @@ const EditListing = () => {
         title: `${formData.propertyType} - ${formData.streetAddress}`,
         description: formData.description,
         property_type: formData.propertyType,
-        address: `${formData.streetAddress}, ${formData.city}, ${formData.state} ${formData.zipCode}`,
+        address: formData.zipCode ? `${formData.streetAddress}, Singapore ${formData.zipCode}` : `${formData.streetAddress}, Singapore`,
         street_address: formData.streetAddress,
-        city: formData.city,
-        state: formData.state,
+        city: 'Singapore',
+        state: 'Singapore',
         zip_code: formData.zipCode,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
         size_sqft: parseFloat(formData.size) || 0,
         floors: parseInt(formData.floors) || 0,
         year_built: parseInt(formData.yearBuilt) || null,
@@ -424,6 +523,7 @@ const EditListing = () => {
 
       // Call the API to update the property
       console.log('Sending amenities to backend:', updateData.amenities);
+      console.log('Sending address to backend:', updateData.address);
       await agentAPI.updateProperty(id, updateData);
       
       console.log('Listing updated successfully');
@@ -459,6 +559,19 @@ const EditListing = () => {
               <div className="edit-listing-form-section">
                 <h2 className="edit-listing-section-title">Property Location Details</h2>
                 <div className="edit-listing-form-grid">
+                  <div className="edit-listing-form-group edit-listing-form-group-full">
+                    <label htmlFor="addressAutocomplete">Property Address (Start typing to search)</label>
+                    <input
+                      ref={autocompleteRef}
+                      type="text"
+                      id="addressAutocomplete"
+                      placeholder="Start typing the property address..."
+                      className="edit-listing-form-input edit-listing-autocomplete-input"
+                    />
+                    <div className="edit-listing-autocomplete-help">
+                      💡 Start typing to see address suggestions from Google Maps
+                    </div>
+                  </div>
                   <div className="edit-listing-form-group">
                     <label htmlFor="streetAddress">Street Address</label>
                     <input
@@ -468,32 +581,11 @@ const EditListing = () => {
                       value={formData.streetAddress}
                       onChange={handleInputChange}
                       className="edit-listing-form-input"
+                      placeholder="Auto-filled from address search"
                     />
                   </div>
                   <div className="edit-listing-form-group">
-                    <label htmlFor="city">City</label>
-                    <input
-                      type="text"
-                      id="city"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleInputChange}
-                      className="edit-listing-form-input"
-                    />
-                  </div>
-                  <div className="edit-listing-form-group">
-                    <label htmlFor="state">State</label>
-                    <input
-                      type="text"
-                      id="state"
-                      name="state"
-                      value={formData.state}
-                      onChange={handleInputChange}
-                      className="edit-listing-form-input"
-                    />
-                  </div>
-                  <div className="edit-listing-form-group">
-                    <label htmlFor="zipCode">Zip Code</label>
+                    <label htmlFor="zipCode">Postal Code</label>
                     <input
                       type="text"
                       id="zipCode"
@@ -501,6 +593,7 @@ const EditListing = () => {
                       value={formData.zipCode}
                       onChange={handleInputChange}
                       className="edit-listing-form-input"
+                      placeholder="Auto-filled from address search"
                     />
                   </div>
                 </div>

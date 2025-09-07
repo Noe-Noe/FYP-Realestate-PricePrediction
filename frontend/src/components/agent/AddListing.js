@@ -1,20 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import { agentAPI } from '../../services/api';
+import { GOOGLE_MAPS_API_KEY } from '../../config/maps';
 import './agent-common.css';
 import './AddListing.css';
+
+const GOOGLE_MAPS_LIBRARIES = ['places'];
+
+function loadGoogleMaps(apiKey) {
+  if (!apiKey) {
+    return Promise.reject(new Error('Missing Google Maps API key'));
+  }
+  if (window.google && window.google.maps) {
+    return Promise.resolve(window.google);
+  }
+  if (window._googleMapsPromise) {
+    return window._googleMapsPromise;
+  }
+  const script = document.createElement('script');
+  const libs = GOOGLE_MAPS_LIBRARIES.join(',');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${libs}`;
+  script.async = true;
+  script.defer = true;
+  window._googleMapsPromise = new Promise((resolve, reject) => {
+    script.onload = () => resolve(window.google);
+    script.onerror = reject;
+  });
+  document.head.appendChild(script);
+  return window._googleMapsPromise;
+}
 
 const AddListing = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('listings');
   const [formData, setFormData] = useState({
     streetAddress: '',
-    city: '',
-    state: '',
     zipCode: '',
+    latitude: null,
+    longitude: null,
     propertyType: '',
     size: '',
     floors: '',
@@ -44,6 +70,83 @@ const AddListing = () => {
 
   const [uploadedImages, setUploadedImages] = useState([]);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
+  
+  // Google Maps autocomplete refs
+  const autocompleteRef = useRef(null);
+  const autocompleteInstanceRef = useRef(null);
+
+  // Initialize Google Maps autocomplete
+  useEffect(() => {
+    const initializeAutocomplete = async () => {
+      try {
+        await loadGoogleMaps(GOOGLE_MAPS_API_KEY);
+        
+        if (autocompleteRef.current && window.google) {
+          const autocomplete = new window.google.maps.places.Autocomplete(
+            autocompleteRef.current,
+            {
+              types: ['address'],
+              componentRestrictions: { country: 'sg' }, // Restrict to Singapore
+              fields: ['address_components', 'formatted_address', 'geometry']
+            }
+          );
+
+          autocompleteInstanceRef.current = autocomplete;
+
+          autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            
+            if (place.geometry && place.address_components) {
+              // Parse address components
+              let streetNumber = '';
+              let route = '';
+              let city = '';
+              let state = '';
+              let zipCode = '';
+
+              place.address_components.forEach(component => {
+                const types = component.types;
+                
+                if (types.includes('street_number')) {
+                  streetNumber = component.long_name;
+                } else if (types.includes('route')) {
+                  route = component.long_name;
+                } else if (types.includes('locality') || types.includes('administrative_area_level_2')) {
+                  city = component.long_name;
+                } else if (types.includes('administrative_area_level_1')) {
+                  state = component.long_name;
+                } else if (types.includes('postal_code')) {
+                  zipCode = component.long_name;
+                }
+              });
+
+              // Update form data with parsed address and coordinates
+              setFormData(prev => ({
+                ...prev,
+                streetAddress: `${streetNumber} ${route}`.trim(),
+                zipCode: zipCode,
+                latitude: place.geometry.location.lat(),
+                longitude: place.geometry.location.lng()
+              }));
+
+              console.log('Address parsed:', {
+                streetAddress: `${streetNumber} ${route}`.trim(),
+                zipCode,
+                coordinates: {
+                  lat: place.geometry.location.lat(),
+                  lng: place.geometry.location.lng()
+                }
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to initialize Google Maps autocomplete:', error);
+      }
+    };
+
+    initializeAutocomplete();
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -109,8 +212,8 @@ const AddListing = () => {
     e.preventDefault();
     
     // Basic form validation
-    if (!formData.streetAddress || !formData.city || !formData.propertyType || !formData.askingPrice) {
-      alert('Please fill in all required fields: Street Address, City, Property Type, and Asking Price');
+    if (!formData.streetAddress || !formData.propertyType || !formData.askingPrice) {
+      alert('Please fill in all required fields: Street Address, Property Type, and Asking Price');
       return;
     }
     
@@ -125,11 +228,13 @@ const AddListing = () => {
         title: `${formData.propertyType} - ${formData.streetAddress}`,
         description: formData.description,
         property_type: formData.propertyType,
-        address: `${formData.streetAddress}, ${formData.city}, ${formData.state} ${formData.zipCode}`,
+        address: formData.zipCode ? `${formData.streetAddress}, Singapore ${formData.zipCode}` : `${formData.streetAddress}, Singapore`,
         street_address: formData.streetAddress,
-        city: formData.city,
-        state: formData.state,
+        city: 'Singapore',
+        state: 'Singapore',
         zip_code: formData.zipCode,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
         size_sqft: parseFloat(formData.size) || 0,
         floors: parseInt(formData.floors) || 0,
         year_built: parseInt(formData.yearBuilt) || null,
@@ -174,6 +279,7 @@ const AddListing = () => {
 
       // Call the API to create the property
       console.log('Sending amenities to backend:', newPropertyData.amenities);
+      console.log('Sending address to backend:', newPropertyData.address);
       const response = await agentAPI.createProperty(newPropertyData);
       
       console.log('Property created successfully:', response);
@@ -208,6 +314,19 @@ const AddListing = () => {
               <div className="add-listing-form-section">
                 <h2 className="add-listing-section-title">Property Location Details</h2>
                 <div className="add-listing-form-grid">
+                  <div className="add-listing-form-group add-listing-form-group-full">
+                    <label htmlFor="addressAutocomplete">Property Address (Start typing to search)</label>
+                    <input
+                      ref={autocompleteRef}
+                      type="text"
+                      id="addressAutocomplete"
+                      placeholder="Start typing the property address..."
+                      className="add-listing-form-input add-listing-autocomplete-input"
+                    />
+                    <div className="add-listing-autocomplete-help">
+                      💡 Start typing to see address suggestions from Google Maps
+                    </div>
+                  </div>
                   <div className="add-listing-form-group">
                     <label htmlFor="streetAddress">Street Address</label>
                     <input
@@ -217,32 +336,11 @@ const AddListing = () => {
                       value={formData.streetAddress}
                       onChange={handleInputChange}
                       className="add-listing-form-input"
+                      placeholder="Auto-filled from address search"
                     />
                   </div>
                   <div className="add-listing-form-group">
-                    <label htmlFor="city">City</label>
-                    <input
-                      type="text"
-                      id="city"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleInputChange}
-                      className="add-listing-form-input"
-                    />
-                  </div>
-                  <div className="add-listing-form-group">
-                    <label htmlFor="state">State</label>
-                    <input
-                      type="text"
-                      id="state"
-                      name="state"
-                      value={formData.state}
-                      onChange={handleInputChange}
-                      className="add-listing-form-input"
-                    />
-                  </div>
-                  <div className="add-listing-form-group">
-                    <label htmlFor="zipCode">Zip Code</label>
+                    <label htmlFor="zipCode">Postal Code</label>
                     <input
                       type="text"
                       id="zipCode"
@@ -250,6 +348,7 @@ const AddListing = () => {
                       value={formData.zipCode}
                       onChange={handleInputChange}
                       className="add-listing-form-input"
+                      placeholder="Auto-filled from address search"
                     />
                   </div>
                 </div>

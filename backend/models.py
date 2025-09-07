@@ -167,6 +167,14 @@ class PricePrediction(db.Model):
     # Relationships
     user = db.relationship('User', backref='price_predictions')
 
+class FAQSection(db.Model):
+    __tablename__ = 'faq_section'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    section_title = db.Column(db.String(255), nullable=False, default='Frequently Asked Questions')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 class FAQEntry(db.Model):
     __tablename__ = 'faq_entries'
     
@@ -232,3 +240,79 @@ class Bookmark(db.Model):
     
     # Relationships
     user = db.relationship('User', backref='bookmarks')
+
+class TeamSection(db.Model):
+    __tablename__ = 'team_section'
+    
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    section_title = db.Column(db.String(255), nullable=False, default='Our Team')
+    section_subtitle = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class TeamMember(db.Model):
+    __tablename__ = 'team_members'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    image_url = db.Column(db.String(500))
+    social_links = db.Column(db.JSON)
+    display_order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class LegalContent(db.Model):
+    __tablename__ = 'legal_content'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    content_type = db.Column(db.String(50), nullable=False)  # 'disclaimer', 'privacy_policy', 'terms_of_use'
+    title = db.Column(db.String(255), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    version = db.Column(db.String(20), default='1.0')
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class SubscriptionPlan(db.Model):
+    __tablename__ = 'subscription_plans'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    plan_name = db.Column(db.String(100), nullable=False)
+    plan_type = db.Column(db.String(20), nullable=False)  # 'free', 'premium', 'agent'
+    monthly_price = db.Column(db.Numeric(10, 2), default=0.00)
+    yearly_price = db.Column(db.Numeric(10, 2), default=0.00)
+    description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True)
+    is_popular = db.Column(db.Boolean, default=False)
+    display_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship with features
+    features = db.relationship('SubscriptionPlanFeature', backref='plan', lazy=True, cascade='all, delete-orphan')
+
+class SubscriptionPlanFeature(db.Model):
+    __tablename__ = 'subscription_plan_features'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    plan_id = db.Column(db.Integer, db.ForeignKey('subscription_plans.id'), nullable=False)
+    feature_name = db.Column(db.String(255), nullable=False)
+    feature_description = db.Column(db.Text)
+    is_included = db.Column(db.Boolean, default=True)
+    display_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ImportantFeature(db.Model):
+    __tablename__ = 'important_features'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    feature_name = db.Column(db.String(255), nullable=False)
+    feature_description = db.Column(db.Text)
+    display_order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -929,7 +929,7 @@ const Profile = () => {
                         checked={selectedPlan === 'monthly'}
                         onChange={handlePlanSelection}
                       />
-                      <label htmlFor="monthly">Monthly - $19.99/month</label>
+                      <label htmlFor="monthly">Monthly - $29/month</label>
                     </div>
                     <div className="profile-plan-option">
                       <input 

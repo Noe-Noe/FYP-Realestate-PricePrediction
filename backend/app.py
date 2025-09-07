@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask_mail import Mail, Message
-from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, ContentSection, Bookmark
+from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature
 from sqlalchemy import text
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -22,6 +22,17 @@ CORS(app)
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-super-secret-jwt-key-change-in-production')
 JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)  # 24 hours
+
+# Database Helper Functions
+def validate_subscription_status(status):
+    """Validate subscription status against database constraints"""
+    valid_statuses = ['active', 'inactive', 'cancelled']
+    return status.lower() in valid_statuses
+
+def validate_user_type(user_type):
+    """Validate user type against database constraints"""
+    valid_types = ['free', 'premium', 'agent', 'admin']
+    return user_type.lower() in valid_types
 
 # JWT Helper Functions
 def create_access_token(user_id, email, user_type):
@@ -48,9 +59,12 @@ def verify_token(token):
 def require_auth(f):
     """Decorator to require authentication"""
     def decorated_function(*args, **kwargs):
+        print(f"🔍 Auth check for {f.__name__}")
         token = request.headers.get('Authorization')
+        print(f"🔍 Token received: {token[:20] + '...' if token else 'None'}")
         
         if not token:
+            print("❌ No token provided")
             return jsonify({'error': 'No token provided'}), 401
         
         # Remove 'Bearer ' prefix if present
@@ -80,8 +94,8 @@ db.init_app(app)
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'bearmeh00@gmail.com'  # ← Change this to your Gmail
-app.config['MAIL_PASSWORD'] = 'tuei rmyg tfqq szai'     # ← Change this to your 16-char app password
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'bearmeh00@gmail.com')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'tuei rmyg tfqq szai')
 
 # Initialize Flask-Mail
 mail = Mail(app)
@@ -299,6 +313,16 @@ def register():
     try:
         db.session.add(user)
         db.session.commit()
+        
+        # Create agent profile if user is an agent
+        if user.user_type == 'agent':
+            agent_profile = AgentProfile(
+                user_id=user.id,
+                first_time_agent=True  # Default to True for new agents
+            )
+            db.session.add(agent_profile)
+            db.session.commit()
+        
         return jsonify({
             'message': 'User created successfully',
             'user_id': user.id,
@@ -570,6 +594,10 @@ def get_property(property_id):
             'amenities': amenities,
             'images': images
         }
+        
+        print(f"Returning property data for ID {property_id}:")
+        print(f"Coordinates: lat={property_data['latitude']}, lng={property_data['longitude']}")
+        print(f"Address: {property_data['address']}")
         
         return jsonify(property_data), 200
     except Exception as e:
@@ -1782,6 +1810,379 @@ def delete_account():
         db.session.rollback()
         return jsonify({'error': 'Failed to delete account'}), 500
 
+# ==================== SUBSCRIPTION PLANS API ====================
+
+# Get all subscription plans
+@app.route('/api/subscription-plans', methods=['GET'])
+def get_subscription_plans():
+    try:
+        plans = SubscriptionPlan.query.filter_by(is_active=True).order_by(SubscriptionPlan.display_order).all()
+        
+        plans_data = []
+        for plan in plans:
+            plan_data = {
+                'id': plan.id,
+                'plan_name': plan.plan_name,
+                'plan_type': plan.plan_type,
+                'monthly_price': float(plan.monthly_price),
+                'yearly_price': float(plan.yearly_price),
+                'description': plan.description,
+                'is_active': plan.is_active,
+                'is_popular': plan.is_popular,
+                'display_order': plan.display_order,
+                'features': []
+            }
+            
+            # Get features for this plan
+            features = SubscriptionPlanFeature.query.filter_by(plan_id=plan.id).order_by(SubscriptionPlanFeature.display_order).all()
+            for feature in features:
+                plan_data['features'].append({
+                    'id': feature.id,
+                    'feature_name': feature.feature_name,
+                    'feature_description': feature.feature_description,
+                    'is_included': feature.is_included,
+                    'display_order': feature.display_order
+                })
+            
+            plans_data.append(plan_data)
+        
+        return jsonify({
+            'success': True,
+            'plans': plans_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': 'Failed to fetch subscription plans'}), 500
+
+# Get single subscription plan
+@app.route('/api/subscription-plans/<int:plan_id>', methods=['GET'])
+def get_subscription_plan(plan_id):
+    try:
+        plan = SubscriptionPlan.query.get(plan_id)
+        
+        if not plan:
+            return jsonify({'error': 'Plan not found'}), 404
+        
+        plan_data = {
+            'id': plan.id,
+            'plan_name': plan.plan_name,
+            'plan_type': plan.plan_type,
+            'monthly_price': float(plan.monthly_price),
+            'yearly_price': float(plan.yearly_price),
+            'description': plan.description,
+            'is_active': plan.is_active,
+            'is_popular': plan.is_popular,
+            'display_order': plan.display_order,
+            'features': []
+        }
+        
+        # Get features for this plan
+        features = SubscriptionPlanFeature.query.filter_by(plan_id=plan.id).order_by(SubscriptionPlanFeature.display_order).all()
+        for feature in features:
+            plan_data['features'].append({
+                'id': feature.id,
+                'feature_name': feature.feature_name,
+                'feature_description': feature.feature_description,
+                'is_included': feature.is_included,
+                'display_order': feature.display_order
+            })
+        
+        return jsonify({
+            'success': True,
+            'plan': plan_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': 'Failed to fetch subscription plan'}), 500
+
+# Create subscription plan (Admin only)
+@app.route('/api/admin/subscription-plans', methods=['POST'])
+@require_auth
+def create_subscription_plan():
+    try:
+        # Check if user is admin
+        user_id = request.user['user_id']
+        user = User.query.get(user_id)
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        data = request.get_json()
+        
+        if not data or not data.get('plan_name') or not data.get('plan_type'):
+            return jsonify({'error': 'Plan name and type are required'}), 400
+        
+        # Create new plan
+        plan = SubscriptionPlan(
+            plan_name=data['plan_name'],
+            plan_type=data['plan_type'],
+            monthly_price=data.get('monthly_price', 0.00),
+            yearly_price=data.get('yearly_price', 0.00),
+            description=data.get('description', ''),
+            display_order=data.get('display_order', 0)
+        )
+        
+        db.session.add(plan)
+        db.session.flush()  # Get the plan ID
+        
+        # Add features if provided
+        if data.get('features'):
+            for feature_data in data['features']:
+                feature = SubscriptionPlanFeature(
+                    plan_id=plan.id,
+                    feature_name=feature_data['feature_name'],
+                    feature_description=feature_data.get('feature_description', ''),
+                    is_included=feature_data.get('is_included', True),
+                    display_order=feature_data.get('display_order', 0)
+                )
+                db.session.add(feature)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Subscription plan created successfully',
+            'plan_id': plan.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create subscription plan'}), 500
+
+# Update subscription plan (Admin only)
+@app.route('/api/admin/subscription-plans/<int:plan_id>', methods=['PUT'])
+@require_auth
+def update_subscription_plan(plan_id):
+    try:
+        print(f"🔍 Update subscription plan called for ID: {plan_id}")
+        print(f"🔍 Request data: {request.get_json()}")
+        
+        # Check if user is admin
+        user_id = request.user['user_id']
+        print(f"🔍 User ID: {user_id}")
+        user = User.query.get(user_id)
+        print(f"🔍 User found: {user}, User type: {user.user_type if user else 'None'}")
+        
+        if not user or user.user_type != 'admin':
+            print("❌ Admin access denied")
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        plan = SubscriptionPlan.query.get(plan_id)
+        if not plan:
+            return jsonify({'error': 'Plan not found'}), 404
+        
+        data = request.get_json()
+        
+        # Update plan details
+        if 'plan_name' in data:
+            plan.plan_name = data['plan_name']
+        if 'plan_type' in data:
+            plan.plan_type = data['plan_type']
+        if 'monthly_price' in data:
+            plan.monthly_price = data['monthly_price']
+        if 'yearly_price' in data:
+            plan.yearly_price = data['yearly_price']
+        if 'description' in data:
+            plan.description = data['description']
+        if 'display_order' in data:
+            plan.display_order = data['display_order']
+        if 'is_active' in data:
+            plan.is_active = data['is_active']
+        if 'is_popular' in data:
+            plan.is_popular = data['is_popular']
+        
+        # Update features if provided
+        if 'features' in data:
+            # Delete existing features
+            SubscriptionPlanFeature.query.filter_by(plan_id=plan_id).delete()
+            
+            # Add new features
+            for feature_data in data['features']:
+                feature = SubscriptionPlanFeature(
+                    plan_id=plan_id,
+                    feature_name=feature_data['feature_name'],
+                    feature_description=feature_data.get('feature_description', ''),
+                    is_included=feature_data.get('is_included', True),
+                    display_order=feature_data.get('display_order', 0)
+                )
+                db.session.add(feature)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Subscription plan updated successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update subscription plan'}), 500
+
+# Delete subscription plan (Admin only)
+@app.route('/api/admin/subscription-plans/<int:plan_id>', methods=['DELETE'])
+@require_auth
+def delete_subscription_plan(plan_id):
+    try:
+        # Check if user is admin
+        user_id = request.user['user_id']
+        user = User.query.get(user_id)
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        plan = SubscriptionPlan.query.get(plan_id)
+        if not plan:
+            return jsonify({'error': 'Plan not found'}), 404
+        
+        # Delete plan (features will be deleted automatically due to cascade)
+        db.session.delete(plan)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Subscription plan deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete subscription plan'}), 500
+
+# ==================== IMPORTANT FEATURES API ====================
+
+# Get all important features
+@app.route('/api/important-features', methods=['GET'])
+def get_important_features():
+    try:
+        features = ImportantFeature.query.filter_by(is_active=True).order_by(ImportantFeature.display_order).all()
+        
+        features_data = []
+        for feature in features:
+            features_data.append({
+                'id': feature.id,
+                'feature_name': feature.feature_name,
+                'feature_description': feature.feature_description,
+                'display_order': feature.display_order
+            })
+        
+        return jsonify({
+            'success': True,
+            'features': features_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': 'Failed to fetch important features'}), 500
+
+# Create important feature (Admin only)
+@app.route('/api/admin/important-features', methods=['POST'])
+@require_auth
+def create_important_feature():
+    try:
+        # Check if user is admin
+        user_id = request.user['user_id']
+        user = User.query.get(user_id)
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        data = request.get_json()
+        print(f"🔍 Received data for creating important feature: {data}")
+        
+        if not data or not data.get('feature_name'):
+            print("❌ Missing feature_name in request data")
+            return jsonify({'error': 'Feature name is required'}), 400
+        
+        feature = ImportantFeature(
+            feature_name=data['feature_name'],
+            feature_description=data.get('feature_description', ''),
+            display_order=data.get('display_order', 0)
+        )
+        
+        db.session.add(feature)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Important feature created successfully',
+            'feature_id': feature.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error creating important feature: {str(e)}")
+        print(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to create important feature: {str(e)}'}), 500
+
+# Update important feature (Admin only)
+@app.route('/api/admin/important-features/<int:feature_id>', methods=['PUT'])
+@require_auth
+def update_important_feature(feature_id):
+    try:
+        # Check if user is admin
+        user_id = request.user['user_id']
+        user = User.query.get(user_id)
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        feature = ImportantFeature.query.get(feature_id)
+        if not feature:
+            return jsonify({'error': 'Feature not found'}), 404
+        
+        data = request.get_json()
+        
+        if 'feature_name' in data:
+            feature.feature_name = data['feature_name']
+        if 'feature_description' in data:
+            feature.feature_description = data['feature_description']
+        if 'display_order' in data:
+            feature.display_order = data['display_order']
+        if 'is_active' in data:
+            feature.is_active = data['is_active']
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Important feature updated successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error updating important feature: {str(e)}")
+        print(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to update important feature: {str(e)}'}), 500
+
+# Delete important feature (Admin only)
+@app.route('/api/admin/important-features/<int:feature_id>', methods=['DELETE'])
+@require_auth
+def delete_important_feature(feature_id):
+    try:
+        # Check if user is admin
+        user_id = request.user['user_id']
+        user = User.query.get(user_id)
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        feature = ImportantFeature.query.get(feature_id)
+        if not feature:
+            return jsonify({'error': 'Feature not found'}), 404
+        
+        db.session.delete(feature)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Important feature deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error deleting important feature: {str(e)}")
+        print(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to delete important feature: {str(e)}'}), 500
+
 # Password recovery - Verify OTP and reset password
 @app.route('/api/auth/reset-password', methods=['POST'])
 def reset_password():
@@ -2058,7 +2459,7 @@ def deactivate_user(user_id):
         
         # Deactivate user
         user.is_active = False
-        user.subscription_status = 'Inactive'
+        user.subscription_status = 'inactive'  # Fixed: lowercase to match database constraint
         db.session.commit()
         
         return jsonify({
@@ -2090,7 +2491,13 @@ def deactivate_own_account():
         # Mark account as inactive and clear sensitive data
         # This allows the same email to be used for new signups
         user.is_active = False
-        user.subscription_status = 'Inactive'
+        
+        # Validate and set subscription status
+        new_status = 'inactive'
+        if not validate_subscription_status(new_status):
+            return jsonify({'error': 'Invalid subscription status'}), 400
+        user.subscription_status = new_status
+        
         user.email = f"deactivated_{user.id}_{int(time.time())}@deactivated.com"
         user.password_hash = "deactivated"
         user.full_name = "Deactivated User"
@@ -2107,7 +2514,88 @@ def deactivate_own_account():
         print(f"Error deactivating own account: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': 'Failed to deactivate account'}), 500
+        
+        # Check for specific constraint violations
+        if 'check constraint' in str(e).lower():
+            return jsonify({'error': 'Invalid data format. Please contact support.'}), 400
+        elif 'foreign key' in str(e).lower():
+            return jsonify({'error': 'Cannot deactivate account due to existing data. Please contact support.'}), 400
+        else:
+            return jsonify({'error': 'Failed to deactivate account'}), 500
+
+# User completely deletes their own account (hard delete)
+@app.route('/api/user/delete-account', methods=['POST'])
+@require_auth
+def delete_own_account():
+    try:
+        # Get current user
+        current_user = request.user
+        
+        # Get user by ID
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_id = user.id
+        
+        # Delete related data first (to avoid foreign key constraints)
+        print(f"🗑️ Deleting all data for user {user_id}...")
+        
+        # Delete user's bookmarks
+        bookmarks_deleted = Bookmark.query.filter_by(user_id=user_id).delete()
+        print(f"📚 Deleted {bookmarks_deleted} bookmarks")
+        
+        # Delete user's price predictions
+        predictions_deleted = PricePrediction.query.filter_by(user_id=user_id).delete()
+        print(f"📊 Deleted {predictions_deleted} predictions")
+        
+        # Delete user's agent profile if exists
+        agent_profile_deleted = AgentProfile.query.filter_by(user_id=user_id).delete()
+        print(f"👤 Deleted {agent_profile_deleted} agent profiles")
+        
+        # Delete user's agent regions if exists
+        agent_regions_deleted = AgentRegion.query.filter_by(agent_id=user_id).delete()
+        print(f"🗺️ Deleted {agent_regions_deleted} agent regions")
+        
+        # Delete user's properties if they're an agent
+        properties_deleted = Property.query.filter_by(agent_id=user_id).delete()
+        print(f"🏢 Deleted {properties_deleted} properties")
+        
+        # Delete user's feedback/reviews
+        feedback_deleted = BusinessInquiry.query.filter_by(user_id=user_id).delete()
+        print(f"💬 Deleted {feedback_deleted} feedback entries")
+        
+        # Finally delete the user account
+        db.session.delete(user)
+        db.session.commit()
+        
+        print(f"✅ User {user_id} completely deleted from database")
+        
+        return jsonify({
+            'message': 'Account completely deleted. You can sign up again with the same email.',
+            'user_id': user_id,
+            'status': 'deleted',
+            'data_removed': {
+                'bookmarks': bookmarks_deleted,
+                'predictions': predictions_deleted,
+                'agent_profile': agent_profile_deleted,
+                'agent_regions': agent_regions_deleted,
+                'properties': properties_deleted,
+                'feedback': feedback_deleted
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting account: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Check for specific constraint violations
+        if 'foreign key' in str(e).lower():
+            return jsonify({'error': 'Cannot delete account due to existing data. Please contact support.'}), 400
+        else:
+            return jsonify({'error': 'Failed to delete account'}), 500
 
 # Suspend user account
 @app.route('/api/admin/users/<int:user_id>/suspend', methods=['POST'])
@@ -2128,8 +2616,8 @@ def suspend_user(user_id):
         if user.id == current_user['user_id']:
             return jsonify({'error': 'Cannot suspend your own account'}), 400
         
-        # Suspend user (set subscription status to suspended)
-        user.subscription_status = 'Suspended'
+        # Suspend user (set subscription status to cancelled)
+        user.subscription_status = 'cancelled'  # Fixed: use valid constraint value
         db.session.commit()
         
         return jsonify({
@@ -2162,7 +2650,7 @@ def reactivate_user(user_id):
         
         # Reactivate user
         user.is_active = True
-        user.subscription_status = 'Active'
+        user.subscription_status = 'active'  # Fixed: lowercase to match database constraint
         db.session.commit()
         
         return jsonify({
@@ -2177,6 +2665,66 @@ def reactivate_user(user_id):
         import traceback
         traceback.print_exc()
         return jsonify({'error': 'Failed to reactivate user'}), 500
+
+# Admin completely deletes a user account (hard delete)
+@app.route('/api/admin/users/<int:user_id>/delete', methods=['DELETE'])
+@require_auth
+def admin_delete_user(user_id):
+    try:
+        # Get current user to verify admin status
+        current_user = request.user
+        if current_user['user_type'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        # Get user by ID
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Check if trying to delete self
+        if user.id == current_user['user_id']:
+            return jsonify({'error': 'Cannot delete your own account'}), 400
+        
+        print(f"🗑️ Admin deleting user {user_id} ({user.email})...")
+        
+        # Delete related data first (to avoid foreign key constraints)
+        bookmarks_deleted = Bookmark.query.filter_by(user_id=user_id).delete()
+        predictions_deleted = PricePrediction.query.filter_by(user_id=user_id).delete()
+        agent_profile_deleted = AgentProfile.query.filter_by(user_id=user_id).delete()
+        agent_regions_deleted = AgentRegion.query.filter_by(agent_id=user_id).delete()
+        properties_deleted = Property.query.filter_by(agent_id=user_id).delete()
+        feedback_deleted = BusinessInquiry.query.filter_by(user_id=user_id).delete()
+        
+        # Finally delete the user account
+        db.session.delete(user)
+        db.session.commit()
+        
+        print(f"✅ Admin deleted user {user_id} completely from database")
+        
+        return jsonify({
+            'message': 'User account completely deleted by admin',
+            'user_id': user_id,
+            'deleted_by': current_user['user_id'],
+            'data_removed': {
+                'bookmarks': bookmarks_deleted,
+                'predictions': predictions_deleted,
+                'agent_profile': agent_profile_deleted,
+                'agent_regions': agent_regions_deleted,
+                'properties': properties_deleted,
+                'feedback': feedback_deleted
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error admin deleting user: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        if 'foreign key' in str(e).lower():
+            return jsonify({'error': 'Cannot delete user due to existing data. Please contact support.'}), 400
+        else:
+            return jsonify({'error': 'Failed to delete user'}), 500
 
 # Get all feedback for admin review
 @app.route('/api/admin/feedback', methods=['GET'])
@@ -2702,11 +3250,44 @@ def get_agent_status():
                 'user_id': current_user['user_id']
             }), 200
         else:
-            return jsonify({'error': 'Agent profile not found'}), 404
+            # Create agent profile if it doesn't exist (for existing agents)
+            agent_profile = AgentProfile(
+                user_id=current_user['user_id'],
+                first_time_agent=False  # Assume existing agents have completed onboarding
+            )
+            db.session.add(agent_profile)
+            db.session.commit()
+            
+            return jsonify({
+                'first_time_agent': agent_profile.first_time_agent,
+                'user_id': current_user['user_id']
+            }), 200
         
     except Exception as e:
         print(f"Error getting agent status: {e}")
         return jsonify({'error': 'Failed to get agent status'}), 500
+
+@app.route('/api/onboarding/user-status', methods=['GET'])
+@require_auth
+def get_user_status():
+    """Get user's first-time status"""
+    try:
+        current_user = request.user
+        
+        # Get user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        return jsonify({
+            'first_time_user': user.first_time_user,
+            'user_type': user.user_type,
+            'user_id': current_user['user_id']
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting user status: {e}")
+        return jsonify({'error': 'Failed to get user status'}), 500
 
 # Agent Dashboard API endpoints
 @app.route('/api/agent/dashboard-stats', methods=['GET'])
@@ -3080,6 +3661,8 @@ def create_agent_property():
             return jsonify({'error': 'User is not an agent'}), 403
         
         data = request.get_json()
+        print(f"Creating property with data: {data}")
+        print(f"Latitude: {data.get('latitude')}, Longitude: {data.get('longitude')}")
         
         # Create new property
         new_property = Property(
@@ -3206,9 +3789,16 @@ def update_agent_property(property_id):
 def delete_agent_property(property_id):
     """Delete a property for the current agent"""
     try:
+        print(f"🗑️ DELETE request for property {property_id}")
         current_user = request.user
+        print(f"Current user: {current_user}")
+        
         user = User.query.get(current_user['user_id'])
+        print(f"User found: {user.full_name if user else 'None'}")
+        print(f"User type: {user.user_type if user else 'None'}")
+        
         if not user or user.user_type != 'agent':
+            print("❌ User is not an agent")
             return jsonify({'error': 'User is not an agent'}), 403
         
         property = Property.query.filter_by(
@@ -3216,22 +3806,54 @@ def delete_agent_property(property_id):
             agent_id=current_user['user_id']
         ).first()
         
+        print(f"Property found: {property.title if property else 'None'}")
+        
         if not property:
+            print("❌ Property not found")
             return jsonify({'error': 'Property not found'}), 404
         
+        print(f"Deleting property: {property.title} (ID: {property.id})")
+        
         # Delete related data first
-        PropertyAmenity.query.filter_by(property_id=property.id).delete()
-        PropertyImage.query.filter_by(property_id=property.id).delete()
+        try:
+            amenities_deleted = PropertyAmenity.query.filter_by(property_id=property.id).delete()
+            print(f"Deleted {amenities_deleted} amenities")
+        except Exception as e:
+            print(f"Error deleting amenities: {e}")
+            raise
         
-        # Delete the property
-        db.session.delete(property)
-        db.session.commit()
+        try:
+            images_deleted = PropertyImage.query.filter_by(property_id=property.id).delete()
+            print(f"Deleted {images_deleted} images")
+        except Exception as e:
+            print(f"Error deleting images: {e}")
+            raise
         
+        try:
+            # Delete property views
+            views_deleted = PropertyView.query.filter_by(property_id=property.id).delete()
+            print(f"Deleted {views_deleted} property views")
+        except Exception as e:
+            print(f"Error deleting property views: {e}")
+            # Don't raise here as PropertyView table might not exist yet
+        
+        try:
+            # Delete the property
+            db.session.delete(property)
+            db.session.commit()
+            print("Property deleted successfully from database")
+        except Exception as e:
+            print(f"Error deleting property: {e}")
+            raise
+        
+        print(f"✅ Property {property_id} deleted successfully")
         return jsonify({'message': 'Property deleted successfully'}), 200
     except Exception as e:
         print(f"Error deleting agent property: {e}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
-        return jsonify({'error': 'Failed to delete property'}), 500
+        return jsonify({'error': f'Failed to delete property: {str(e)}'}), 500
 
 # Add referral code column and generate codes for premium users
 @app.route('/api/db/add-referral-codes', methods=['POST'])
@@ -3885,7 +4507,1663 @@ def get_user_preferences():
         print(f"Error getting user preferences: {e}")
         return jsonify({'error': 'Failed to get preferences'}), 500
 
+# Support Content API Endpoints
+
+@app.route('/api/support/faq', methods=['GET'])
+def get_faq_entries():
+    """Get all FAQ entries"""
+    try:
+        faqs = FAQEntry.query.filter_by(is_active=True).order_by(FAQEntry.display_order).all()
+        
+        faq_list = []
+        for faq in faqs:
+            faq_list.append({
+                'id': faq.id,
+                'question': faq.question,
+                'answer': faq.answer,
+                'category': faq.category,
+                'display_order': faq.display_order
+            })
+        
+        return jsonify({
+            'success': True,
+            'faqs': faq_list
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting FAQ entries: {e}")
+        return jsonify({'error': 'Failed to get FAQ entries'}), 500
+
+# FAQ Management API Endpoints
+
+@app.route('/api/faq/section', methods=['GET'])
+def get_faq_section():
+    """Get FAQ section details"""
+    try:
+        section = FAQSection.query.first()
+        if not section:
+            # Create default section if none exists
+            section = FAQSection(section_title='Frequently Asked Questions')
+            db.session.add(section)
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'section': {
+                'id': section.id,
+                'section_title': section.section_title,
+                'created_at': section.created_at.isoformat() if section.created_at else None,
+                'updated_at': section.updated_at.isoformat() if section.updated_at else None
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting FAQ section: {e}")
+        return jsonify({'error': 'Failed to get FAQ section'}), 500
+
+@app.route('/api/faq/section', methods=['PUT'])
+@require_auth
+def update_faq_section():
+    """Update FAQ section details"""
+    try:
+        data = request.get_json()
+        section_title = data.get('section_title', '').strip()
+        
+        if not section_title:
+            return jsonify({'error': 'Section title is required'}), 400
+        
+        section = FAQSection.query.first()
+        if not section:
+            section = FAQSection(section_title=section_title)
+            db.session.add(section)
+        else:
+            section.section_title = section_title
+            section.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'FAQ section updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating FAQ section: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update FAQ section'}), 500
+
+@app.route('/api/faq/entries', methods=['GET'])
+def get_faq_entries_admin():
+    """Get all FAQ entries for admin management"""
+    try:
+        faqs = FAQEntry.query.order_by(FAQEntry.display_order, FAQEntry.created_at).all()
+        
+        faq_list = []
+        for faq in faqs:
+            faq_list.append({
+                'id': faq.id,
+                'question': faq.question,
+                'answer': faq.answer,
+                'category': faq.category,
+                'display_order': faq.display_order,
+                'is_active': faq.is_active,
+                'created_at': faq.created_at.isoformat(),
+                'updated_at': faq.updated_at.isoformat()
+            })
+        
+        return jsonify({
+            'success': True,
+            'faqs': faq_list
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting FAQ entries: {e}")
+        return jsonify({'error': 'Failed to get FAQ entries'}), 500
+
+@app.route('/api/faq/entries/<int:faq_id>', methods=['GET'])
+def get_faq_entry(faq_id):
+    """Get a specific FAQ entry"""
+    try:
+        faq = FAQEntry.query.get(faq_id)
+        if not faq:
+            return jsonify({'error': 'FAQ entry not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'faq': {
+                'id': faq.id,
+                'question': faq.question,
+                'answer': faq.answer,
+                'category': faq.category,
+                'display_order': faq.display_order,
+                'is_active': faq.is_active,
+                'created_at': faq.created_at.isoformat(),
+                'updated_at': faq.updated_at.isoformat()
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting FAQ entry: {e}")
+        return jsonify({'error': 'Failed to get FAQ entry'}), 500
+
+@app.route('/api/faq/entries', methods=['POST'])
+@require_auth
+def create_faq_entry():
+    """Create a new FAQ entry"""
+    try:
+        data = request.get_json()
+        question = data.get('question', '').strip()
+        answer = data.get('answer', '').strip()
+        category = data.get('category', '').strip()
+        display_order = data.get('display_order', 0)
+        
+        if not question or not answer:
+            return jsonify({'error': 'Question and answer are required'}), 400
+        
+        # Get the next display order if not provided
+        if display_order == 0:
+            last_faq = FAQEntry.query.order_by(FAQEntry.display_order.desc()).first()
+            display_order = (last_faq.display_order + 1) if last_faq else 1
+        
+        faq = FAQEntry(
+            question=question,
+            answer=answer,
+            category=category,
+            display_order=display_order
+        )
+        
+        db.session.add(faq)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'FAQ entry created successfully',
+            'faq': {
+                'id': faq.id,
+                'question': faq.question,
+                'answer': faq.answer,
+                'category': faq.category,
+                'display_order': faq.display_order,
+                'is_active': faq.is_active
+            }
+        }), 201
+        
+    except Exception as e:
+        print(f"Error creating FAQ entry: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create FAQ entry'}), 500
+
+@app.route('/api/faq/entries/<int:faq_id>', methods=['PUT'])
+@require_auth
+def update_faq_entry(faq_id):
+    """Update an existing FAQ entry"""
+    try:
+        data = request.get_json()
+        faq = FAQEntry.query.get(faq_id)
+        
+        if not faq:
+            return jsonify({'error': 'FAQ entry not found'}), 404
+        
+        question = data.get('question', '').strip()
+        answer = data.get('answer', '').strip()
+        category = data.get('category', '').strip()
+        display_order = data.get('display_order', faq.display_order)
+        is_active = data.get('is_active', faq.is_active)
+        
+        if not question or not answer:
+            return jsonify({'error': 'Question and answer are required'}), 400
+        
+        faq.question = question
+        faq.answer = answer
+        faq.category = category
+        faq.display_order = display_order
+        faq.is_active = is_active
+        faq.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'FAQ entry updated successfully',
+            'faq': {
+                'id': faq.id,
+                'question': faq.question,
+                'answer': faq.answer,
+                'category': faq.category,
+                'display_order': faq.display_order,
+                'is_active': faq.is_active
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating FAQ entry: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update FAQ entry'}), 500
+
+@app.route('/api/faq/entries/<int:faq_id>', methods=['DELETE'])
+@require_auth
+def delete_faq_entry(faq_id):
+    """Delete an FAQ entry"""
+    try:
+        faq = FAQEntry.query.get(faq_id)
+        
+        if not faq:
+            return jsonify({'error': 'FAQ entry not found'}), 404
+        
+        db.session.delete(faq)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'FAQ entry deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error deleting FAQ entry: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete FAQ entry'}), 500
+
+@app.route('/api/support/contact', methods=['GET'])
+def get_contact_info():
+    """Get support contact information"""
+    try:
+        # Get contact info from database
+        contact_items = db.session.execute(text("""
+            SELECT contact_type, contact_value, display_order 
+            FROM support_contact_info 
+            WHERE is_active = true 
+            ORDER BY display_order
+        """)).fetchall()
+        
+        contact_info = {}
+        for item in contact_items:
+            contact_info[item.contact_type] = item.contact_value
+        
+        return jsonify({
+            'success': True,
+            'contact': contact_info
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting contact info: {e}")
+        return jsonify({'error': 'Failed to get contact info'}), 500
+
+@app.route('/api/support/legal/<content_type>', methods=['GET'])
+def get_legal_content(content_type):
+    """Get legal content (disclaimer, privacy_policy, terms_of_use)"""
+    try:
+        valid_types = ['disclaimer', 'privacy_policy', 'terms_of_use']
+        if content_type not in valid_types:
+            return jsonify({'error': 'Invalid content type'}), 400
+        
+        result = db.session.execute(text("""
+            SELECT title, content, version 
+            FROM legal_content 
+            WHERE content_type = :content_type AND is_active = true
+            ORDER BY created_at DESC
+            LIMIT 1
+        """), {'content_type': content_type}).fetchone()
+        
+        if not result:
+            return jsonify({'error': 'Content not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'content': {
+                'title': result.title,
+                'content': result.content,
+                'version': result.version
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting legal content: {e}")
+        return jsonify({'error': 'Failed to get legal content'}), 500
+
+@app.route('/api/support/legal', methods=['GET'])
+def get_all_legal_content():
+    """Get all legal content"""
+    try:
+        result = db.session.execute(text("""
+            SELECT content_type, title, content, version 
+            FROM legal_content 
+            WHERE is_active = true
+            ORDER BY content_type
+        """)).fetchall()
+        
+        legal_content = {}
+        for row in result:
+            legal_content[row.content_type] = {
+                'title': row.title,
+                'content': row.content,
+                'version': row.version
+            }
+        
+        return jsonify({
+            'success': True,
+            'legal_content': legal_content
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting all legal content: {e}")
+        return jsonify({'error': 'Failed to get legal content'}), 500
+
+# Hero Content API Endpoints
+
+@app.route('/api/hero/content', methods=['GET'])
+def get_hero_content():
+    """Get hero section content"""
+    try:
+        result = db.session.execute(text("""
+            SELECT section_name, headline, subheading, hero_background_url, 
+                   marketing_video_url, button_text, button_url
+            FROM hero_content 
+            WHERE is_active = true
+            ORDER BY created_at DESC
+            LIMIT 1
+        """)).fetchone()
+        
+        if not result:
+            return jsonify({'error': 'Hero content not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'hero_content': {
+                'section_name': result.section_name,
+                'headline': result.headline,
+                'subheading': result.subheading,
+                'hero_background_url': result.hero_background_url,
+                'marketing_video_url': result.marketing_video_url,
+                'button_text': result.button_text,
+                'button_url': result.button_url
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting hero content: {e}")
+        return jsonify({'error': 'Failed to get hero content'}), 500
+
+@app.route('/api/hero/content/<section_name>', methods=['GET'])
+def get_hero_content_by_section(section_name):
+    """Get specific hero section content by section name"""
+    try:
+        result = db.session.execute(text("""
+            SELECT section_name, headline, subheading, hero_background_url, 
+                   marketing_video_url, button_text, button_url
+            FROM hero_content 
+            WHERE section_name = :section_name AND is_active = true
+            ORDER BY created_at DESC
+            LIMIT 1
+        """), {'section_name': section_name}).fetchone()
+        
+        if not result:
+            return jsonify({'error': 'Hero content not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'hero_content': {
+                'section_name': result.section_name,
+                'headline': result.headline,
+                'subheading': result.subheading,
+                'hero_background_url': result.hero_background_url,
+                'marketing_video_url': result.marketing_video_url,
+                'button_text': result.button_text,
+                'button_url': result.button_url
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting hero content: {e}")
+        return jsonify({'error': 'Failed to get hero content'}), 500
+
+# Hero Content File Upload Endpoints
+
+@app.route('/api/hero/upload-background', methods=['POST'])
+@require_auth
+def upload_hero_background():
+    """Upload hero background image"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check file type
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            return jsonify({'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'}), 400
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"hero_bg_{timestamp}_{file.filename}"
+        
+        # Save file
+        file_path = os.path.join('admin', 'hero', 'backgrounds', filename)
+        file.save(file_path)
+        
+        # Return the URL path
+        file_url = f"/admin/hero/backgrounds/{filename}"
+        
+        return jsonify({
+            'success': True,
+            'file_url': file_url,
+            'filename': filename
+        }), 200
+        
+    except Exception as e:
+        print(f"Error uploading hero background: {e}")
+        return jsonify({'error': 'Failed to upload background image'}), 500
+
+@app.route('/api/hero/upload-video', methods=['POST'])
+@require_auth
+def upload_hero_video():
+    """Upload hero marketing video"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check file type
+        allowed_extensions = {'mp4', 'webm', 'ogg', 'mov'}
+        if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            return jsonify({'error': 'Invalid file type. Allowed: MP4, WEBM, OGG, MOV'}), 400
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"hero_video_{timestamp}_{file.filename}"
+        
+        # Save file
+        file_path = os.path.join('admin', 'hero', 'videos', filename)
+        file.save(file_path)
+        
+        # Return the URL path
+        file_url = f"/admin/hero/videos/{filename}"
+        
+        return jsonify({
+            'success': True,
+            'file_url': file_url,
+            'filename': filename
+        }), 200
+        
+    except Exception as e:
+        print(f"Error uploading hero video: {e}")
+        return jsonify({'error': 'Failed to upload video'}), 500
+
+@app.route('/api/hero/update-content', methods=['POST'])
+@require_auth
+def update_hero_content():
+    """Update hero content in database"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['headline', 'subheading', 'button_text', 'button_url']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Update or insert hero content
+        result = db.session.execute(text("""
+            INSERT INTO hero_content (section_name, headline, subheading, hero_background_url, 
+                                    marketing_video_url, button_text, button_url)
+            VALUES ('main_hero', :headline, :subheading, :hero_background_url, 
+                    :marketing_video_url, :button_text, :button_url)
+            ON CONFLICT (section_name) 
+            DO UPDATE SET 
+                headline = EXCLUDED.headline,
+                subheading = EXCLUDED.subheading,
+                hero_background_url = EXCLUDED.hero_background_url,
+                marketing_video_url = EXCLUDED.marketing_video_url,
+                button_text = EXCLUDED.button_text,
+                button_url = EXCLUDED.button_url,
+                updated_at = CURRENT_TIMESTAMP
+        """), {
+            'headline': data['headline'],
+            'subheading': data['subheading'],
+            'hero_background_url': data.get('hero_background_url'),
+            'marketing_video_url': data.get('marketing_video_url'),
+            'button_text': data['button_text'],
+            'button_url': data['button_url']
+        })
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Hero content updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating hero content: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update hero content'}), 500
+
+# Serve uploaded files
+@app.route('/admin/hero/backgrounds/<filename>')
+def serve_hero_background(filename):
+    """Serve hero background images"""
+    return send_from_directory(os.path.join('admin', 'hero', 'backgrounds'), filename)
+
+@app.route('/admin/hero/videos/<filename>')
+def serve_hero_video(filename):
+    """Serve hero videos"""
+    return send_from_directory(os.path.join('admin', 'hero', 'videos'), filename)
+
+# HowItWorks Content API Endpoints
+
+@app.route('/api/howitworks/properties', methods=['GET'])
+def get_howitworks_properties():
+    """Get all HowItWorks properties"""
+    try:
+        result = db.session.execute(text("""
+            SELECT id, property_order, title, address, level, unit_area, property_type, image_url
+            FROM howitworks_properties 
+            WHERE is_active = true
+            ORDER BY property_order
+        """)).fetchall()
+        
+        properties = []
+        for row in result:
+            properties.append({
+                'id': row.id,
+                'property_order': row.property_order,
+                'title': row.title,
+                'address': row.address,
+                'level': row.level,
+                'unit_area': row.unit_area,
+                'property_type': row.property_type,
+                'image_url': row.image_url
+            })
+        
+        return jsonify({
+            'success': True,
+            'properties': properties
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting HowItWorks properties: {e}")
+        return jsonify({'error': 'Failed to get HowItWorks properties'}), 500
+
+@app.route('/api/howitworks/properties/<int:property_id>', methods=['GET'])
+def get_howitworks_property(property_id):
+    """Get specific HowItWorks property by ID"""
+    try:
+        result = db.session.execute(text("""
+            SELECT id, property_order, title, address, level, unit_area, property_type, image_url
+            FROM howitworks_properties 
+            WHERE id = :property_id AND is_active = true
+        """), {'property_id': property_id}).fetchone()
+        
+        if not result:
+            return jsonify({'error': 'Property not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'property': {
+                'id': result.id,
+                'property_order': result.property_order,
+                'title': result.title,
+                'address': result.address,
+                'level': result.level,
+                'unit_area': result.unit_area,
+                'property_type': result.property_type,
+                'image_url': result.image_url
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting HowItWorks property: {e}")
+        return jsonify({'error': 'Failed to get HowItWorks property'}), 500
+
+@app.route('/api/howitworks/properties/<int:property_id>', methods=['PUT'])
+@require_auth
+def update_howitworks_property(property_id):
+    """Update HowItWorks property"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['title', 'address', 'property_type']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Update property
+        result = db.session.execute(text("""
+            UPDATE howitworks_properties 
+            SET title = :title, address = :address, level = :level, 
+                unit_area = :unit_area, property_type = :property_type, 
+                image_url = :image_url, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :property_id AND is_active = true
+        """), {
+            'property_id': property_id,
+            'title': data['title'],
+            'address': data['address'],
+            'level': data.get('level'),
+            'unit_area': data.get('unit_area'),
+            'property_type': data['property_type'],
+            'image_url': data.get('image_url')
+        })
+        
+        if result.rowcount == 0:
+            return jsonify({'error': 'Property not found'}), 404
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Property updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating HowItWorks property: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update property'}), 500
+
+# Features Content API Endpoints
+
+@app.route('/api/features/steps', methods=['GET'])
+def get_features_steps():
+    """Get all features steps"""
+    try:
+        result = db.session.execute(text("""
+            SELECT id, step_number, step_title, step_description, step_image
+            FROM features_steps 
+            WHERE is_active = true
+            ORDER BY step_number
+        """)).fetchall()
+        
+        steps = []
+        for row in result:
+            steps.append({
+                'id': row.id,
+                'step_number': row.step_number,
+                'step_title': row.step_title,
+                'step_description': row.step_description,
+                'step_image': row.step_image
+            })
+        
+        return jsonify({
+            'success': True,
+            'steps': steps
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting features steps: {e}")
+        return jsonify({'error': 'Failed to get features steps'}), 500
+
+@app.route('/api/features/steps/<int:step_id>', methods=['GET'])
+def get_features_step(step_id):
+    """Get specific features step by ID"""
+    try:
+        result = db.session.execute(text("""
+            SELECT id, step_number, step_title, step_description, step_image
+            FROM features_steps 
+            WHERE id = :step_id AND is_active = true
+        """), {'step_id': step_id}).fetchone()
+        
+        if not result:
+            return jsonify({'error': 'Step not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'step': {
+                'id': result.id,
+                'step_number': result.step_number,
+                'step_title': result.step_title,
+                'step_description': result.step_description,
+                'step_image': result.step_image
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting features step: {e}")
+        return jsonify({'error': 'Failed to get features step'}), 500
+
+@app.route('/api/features/steps/<int:step_id>', methods=['PUT'])
+@require_auth
+def update_features_step(step_id):
+    """Update features step"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['step_title', 'step_description']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Update step
+        result = db.session.execute(text("""
+            UPDATE features_steps 
+            SET step_title = :step_title, step_description = :step_description, 
+                step_image = :step_image, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :step_id AND is_active = true
+        """), {
+            'step_id': step_id,
+            'step_title': data['step_title'],
+            'step_description': data['step_description'],
+            'step_image': data.get('step_image')
+        })
+        
+        if result.rowcount == 0:
+            return jsonify({'error': 'Step not found'}), 404
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Step updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating features step: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update step'}), 500
+
+@app.route('/api/features/steps', methods=['POST'])
+@require_auth
+def create_features_step():
+    """Create new features step"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['step_title', 'step_description']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Get the next step number
+        result = db.session.execute(text("""
+            SELECT COALESCE(MAX(step_number), 0) + 1 as next_step_number
+            FROM features_steps
+        """)).fetchone()
+        
+        next_step_number = result.next_step_number
+        
+        # Create new step
+        result = db.session.execute(text("""
+            INSERT INTO features_steps (step_number, step_title, step_description, step_image)
+            VALUES (:step_number, :step_title, :step_description, :step_image)
+            RETURNING id
+        """), {
+            'step_number': next_step_number,
+            'step_title': data['step_title'],
+            'step_description': data['step_description'],
+            'step_image': data.get('step_image', '')
+        })
+        
+        new_step_id = result.fetchone().id
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Step created successfully',
+            'step_id': new_step_id
+        }), 201
+        
+    except Exception as e:
+        print(f"Error creating features step: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create step'}), 500
+
+@app.route('/api/features/steps/<int:step_id>', methods=['DELETE'])
+@require_auth
+def delete_features_step(step_id):
+    """Delete features step (hard delete - permanently remove from database)"""
+    try:
+        # First check if step exists
+        check_result = db.session.execute(text("""
+            SELECT id FROM features_steps 
+            WHERE id = :step_id AND is_active = true
+        """), {'step_id': step_id}).fetchone()
+        
+        if not check_result:
+            return jsonify({'error': 'Step not found'}), 404
+        
+        # Hard delete step - permanently remove from database
+        result = db.session.execute(text("""
+            DELETE FROM features_steps 
+            WHERE id = :step_id
+        """), {'step_id': step_id})
+        
+        if result.rowcount == 0:
+            return jsonify({'error': 'Step not found'}), 404
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Step deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error deleting features step: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete step'}), 500
+
+@app.route('/api/features/section-title', methods=['GET'])
+def get_features_section_title():
+    """Get features section title"""
+    try:
+        result = db.session.execute(text("""
+            SELECT section_title FROM features_section 
+            WHERE id = 1
+        """)).fetchone()
+        
+        section_title = result.section_title if result else 'How it Works'
+        
+        return jsonify({
+            'success': True,
+            'section_title': section_title
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting features section title: {e}")
+        return jsonify({'error': 'Failed to get section title'}), 500
+
+@app.route('/api/features/section-title', methods=['PUT'])
+@require_auth
+def update_features_section_title():
+    """Update features section title"""
+    try:
+        data = request.get_json()
+        
+        if 'section_title' not in data:
+            return jsonify({'error': 'Missing section_title field'}), 400
+        
+        # Update or insert section title
+        result = db.session.execute(text("""
+            INSERT INTO features_section (id, section_title, updated_at)
+            VALUES (1, :section_title, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) 
+            DO UPDATE SET 
+                section_title = :section_title,
+                updated_at = CURRENT_TIMESTAMP
+        """), {'section_title': data['section_title']})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Section title updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating features section title: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update section title'}), 500
+
+# Team API Endpoints
+
+@app.route('/api/team/section', methods=['GET'])
+def get_team_section():
+    """Get team section details"""
+    try:
+        team_section = TeamSection.query.filter_by(id=1).first()
+        
+        if team_section:
+            section_title = team_section.section_title
+            section_subtitle = team_section.section_subtitle
+        else:
+            section_title = 'Our Team'
+            section_subtitle = 'Worem ipsum dolor sit amet, consectetur adipiscing elit. Nunc vulputate libero et velit interdum, ac aliquet odio mattis.'
+        
+        return jsonify({
+            'success': True,
+            'section_title': section_title,
+            'section_subtitle': section_subtitle
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting team section: {e}")
+        return jsonify({'error': 'Failed to get team section'}), 500
+
+@app.route('/api/team/section', methods=['PUT'])
+@require_auth
+def update_team_section():
+    """Update team section details"""
+    try:
+        data = request.get_json()
+        
+        if 'section_title' not in data:
+            return jsonify({'error': 'Missing section_title field'}), 400
+        
+        # Get or create team section
+        team_section = TeamSection.query.filter_by(id=1).first()
+        
+        if team_section:
+            # Update existing
+            team_section.section_title = data['section_title']
+            team_section.section_subtitle = data.get('section_subtitle', '')
+            team_section.updated_at = datetime.utcnow()
+        else:
+            # Create new
+            team_section = TeamSection(
+                id=1,
+                section_title=data['section_title'],
+                section_subtitle=data.get('section_subtitle', '')
+            )
+            db.session.add(team_section)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Team section updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating team section: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update team section'}), 500
+
+@app.route('/api/team/members', methods=['GET'])
+def get_team_members():
+    """Get all team members"""
+    try:
+        members = TeamMember.query.filter_by(is_active=True).order_by(TeamMember.display_order, TeamMember.created_at).all()
+        
+        members_list = []
+        for member in members:
+            # Convert relative image URL to full URL
+            image_url = member.image_url
+            if image_url and not image_url.startswith('http'):
+                image_url = f"http://localhost:5000{image_url}"
+            
+            members_list.append({
+                'id': member.id,
+                'name': member.name,
+                'role': member.role,
+                'description': member.description,
+                'image_url': image_url,
+                'social_links': member.social_links or {},
+                'display_order': member.display_order
+            })
+        
+        return jsonify({
+            'success': True,
+            'members': members_list
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting team members: {e}")
+        return jsonify({'error': 'Failed to get team members'}), 500
+
+@app.route('/api/team/members/<int:member_id>', methods=['GET'])
+def get_team_member(member_id):
+    """Get specific team member by ID"""
+    try:
+        member = TeamMember.query.filter_by(id=member_id, is_active=True).first()
+        
+        if not member:
+            return jsonify({'error': 'Team member not found'}), 404
+        
+        # Convert relative image URL to full URL
+        image_url = member.image_url
+        if image_url and not image_url.startswith('http'):
+            image_url = f"http://localhost:5000{image_url}"
+        
+        return jsonify({
+            'success': True,
+            'member': {
+                'id': member.id,
+                'name': member.name,
+                'role': member.role,
+                'description': member.description,
+                'image_url': image_url,
+                'social_links': member.social_links or {},
+                'display_order': member.display_order
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting team member: {e}")
+        return jsonify({'error': 'Failed to get team member'}), 500
+
+@app.route('/api/team/members', methods=['POST'])
+@require_auth
+def create_team_member():
+    """Create new team member"""
+    try:
+        data = request.get_json()
+        print(f"Received team member data: {data}")
+        
+        # Validate required fields
+        required_fields = ['name', 'role']
+        for field in required_fields:
+            if field not in data:
+                print(f"Missing required field: {field}")
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Get the next display order
+        print("Getting next display order...")
+        last_member = TeamMember.query.order_by(TeamMember.display_order.desc()).first()
+        next_order = (last_member.display_order + 1) if last_member else 1
+        print(f"Next display order: {next_order}")
+        
+        # Create new team member using ORM
+        print("Creating team member...")
+        new_member = TeamMember(
+            name=data['name'],
+            role=data['role'],
+            description=data.get('description', ''),
+            image_url=data.get('image_url', ''),  # This will be a file path, not base64
+            social_links=data.get('social_links', {}),
+            display_order=next_order
+        )
+        
+        db.session.add(new_member)
+        db.session.commit()
+        
+        print(f"Created team member with ID: {new_member.id}")
+        print("Team member committed to database")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Team member created successfully',
+            'member_id': new_member.id
+        }), 201
+        
+    except Exception as e:
+        print(f"Error creating team member: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create team member'}), 500
+
+@app.route('/api/team/members/<int:member_id>', methods=['PUT'])
+@require_auth
+def update_team_member(member_id):
+    """Update team member"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'role']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Get team member using ORM
+        member = TeamMember.query.filter_by(id=member_id, is_active=True).first()
+        
+        if not member:
+            return jsonify({'error': 'Team member not found'}), 404
+        
+        # Update team member using ORM
+        member.name = data['name']
+        member.role = data['role']
+        member.description = data.get('description', '')
+        member.image_url = data.get('image_url', '')
+        member.social_links = data.get('social_links', {})
+        member.display_order = data.get('display_order', 0)
+        member.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Team member updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating team member: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update team member'}), 500
+
+@app.route('/api/team/members/<int:member_id>', methods=['DELETE'])
+@require_auth
+def delete_team_member(member_id):
+    """Delete team member (hard delete)"""
+    try:
+        # Get team member using ORM
+        member = TeamMember.query.filter_by(id=member_id, is_active=True).first()
+        
+        if not member:
+            return jsonify({'error': 'Team member not found'}), 404
+        
+        # Hard delete team member using ORM
+        db.session.delete(member)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Team member deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error deleting team member: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete team member'}), 500
+
+# Upload team member profile picture
+@app.route('/api/team/members/upload-profile-picture', methods=['POST'])
+@require_auth
+def upload_team_member_profile_picture():
+    """Upload team member profile picture"""
+    print("=== Team Member Profile Picture Upload Debug ===")
+    print(f"Request method: {request.method}")
+    print(f"Request files: {list(request.files.keys())}")
+    print(f"Request form: {list(request.form.keys())}")
+    
+    # Get user from authenticated token
+    user_id = request.user['user_id']
+    print(f"User ID: {user_id}")
+    
+    user = User.query.get(user_id)
+    if not user:
+        print("User not found")
+        return jsonify({'error': 'User not found'}), 404
+    
+    # Check if user is admin
+    if user.user_type != 'admin':
+        print("User is not an admin")
+        return jsonify({'error': 'Access denied. Profile picture upload only available for admin users.'}), 403
+    
+    # Check if file was uploaded
+    if 'profile_picture' not in request.files:
+        print("No profile_picture in request.files")
+        return jsonify({'error': 'No profile picture file provided'}), 400
+    
+    file = request.files['profile_picture']
+    print(f"File name: {file.filename}")
+    print(f"File content type: {file.content_type}")
+    
+    # Check if file is empty
+    if file.filename == '':
+        print("File filename is empty")
+        return jsonify({'error': 'No file selected'}), 400
+    
+    # Check file type
+    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+    if not file.filename.lower().endswith(tuple('.' + ext for ext in allowed_extensions)):
+        return jsonify({'error': 'Invalid file type. Only PNG, JPG, JPEG, and GIF files are allowed.'}), 400
+    
+    try:
+        # Generate unique filename
+        import os
+        from werkzeug.utils import secure_filename
+        filename = secure_filename(file.filename)
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        unique_filename = f"team_member_{timestamp}_{filename}"
+        print(f"Generated filename: {unique_filename}")
+        
+        # Create upload directory if it doesn't exist
+        upload_dir = os.path.join(os.getcwd(), 'admin', 'team')
+        print(f"Upload directory: {upload_dir}")
+        os.makedirs(upload_dir, exist_ok=True)
+        print(f"Upload directory created/exists: {os.path.exists(upload_dir)}")
+        
+        # Save file
+        file_path = os.path.join(upload_dir, unique_filename)
+        print(f"Full file path: {file_path}")
+        file.save(file_path)
+        print(f"File saved successfully: {os.path.exists(file_path)}")
+        
+        # Create profile picture URL
+        profile_url = f"/admin/team/{unique_filename}"
+        print(f"Profile URL: {profile_url}")
+        
+        return jsonify({
+            'message': 'Profile picture uploaded successfully',
+            'profile_picture_url': profile_url
+        }), 200
+        
+    except Exception as e:
+        print(f"Error uploading profile picture: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to upload profile picture'}), 500
+
+# Serve uploaded team member profile pictures
+@app.route('/admin/team/<filename>')
+def serve_team_member_profile_picture(filename):
+    """Serve uploaded team member profile pictures"""
+    print(f"=== Serving Team Member Profile Picture ===")
+    print(f"Requested filename: {filename}")
+    
+    upload_dir = os.path.join(os.getcwd(), 'admin', 'team')
+    print(f"Upload directory: {upload_dir}")
+    
+    file_path = os.path.join(upload_dir, filename)
+    print(f"Full file path: {file_path}")
+    print(f"File exists: {os.path.exists(file_path)}")
+    
+    if not os.path.exists(file_path):
+        print(f"File not found: {file_path}")
+        return jsonify({'error': 'File not found'}), 404
+    
+    try:
+        response = send_from_directory(upload_dir, filename)
+        # Add CORS headers
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
+    except Exception as e:
+        print(f"Error serving file: {e}")
+        return jsonify({'error': 'Error serving file'}), 500
+
+# Database migration endpoint
+@app.route('/api/migrate/update-image-url-column', methods=['POST'])
+def migrate_image_url_column():
+    """Update team_members.image_url column to TEXT to support base64 data URLs"""
+    try:
+        # Execute the ALTER TABLE command
+        db.session.execute(text("ALTER TABLE team_members ALTER COLUMN image_url TYPE TEXT;"))
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Successfully updated team_members.image_url to TEXT!'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating image_url column: {e}")
+        db.session.rollback()
+        return jsonify({'error': f'Failed to update image_url column: {str(e)}'}), 500
+
+# Contact Information API Endpoints
+
+@app.route('/api/contact/info', methods=['GET'])
+def get_contact_information():
+    """Get contact information"""
+    try:
+        result = db.session.execute(text("""
+            SELECT contact_type, contact_value, display_order
+            FROM support_contact_info 
+            WHERE is_active = true
+            ORDER BY display_order, created_at
+        """)).fetchall()
+        
+        contact_info = []
+        for row in result:
+            contact_info.append({
+                'contact_type': row.contact_type,
+                'contact_value': row.contact_value,
+                'display_order': row.display_order
+            })
+        
+        return jsonify({
+            'success': True,
+            'contact_info': contact_info
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting contact info: {e}")
+        return jsonify({'error': 'Failed to get contact information'}), 500
+
+@app.route('/api/contact/info', methods=['PUT'])
+@require_auth
+def update_contact_information():
+    """Update contact information"""
+    try:
+        data = request.get_json()
+        
+        if 'contact_info' not in data:
+            return jsonify({'error': 'Missing contact_info field'}), 400
+        
+        # Clear existing contact info
+        db.session.execute(text("UPDATE support_contact_info SET is_active = false"))
+        
+        # Insert new contact info
+        for item in data['contact_info']:
+            if 'contact_type' in item and 'contact_value' in item:
+                db.session.execute(text("""
+                    INSERT INTO support_contact_info (contact_type, contact_value, display_order, is_active)
+                    VALUES (:contact_type, :contact_value, :display_order, true)
+                """), {
+                    'contact_type': item['contact_type'],
+                    'contact_value': item['contact_value'],
+                    'display_order': item.get('display_order', 0)
+                })
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Contact information updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating contact info: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update contact information'}), 500
+
+# Legal Content API Endpoints
+@app.route('/api/legal/<content_type>', methods=['GET'])
+def get_legal_content_by_type(content_type):
+    """Get legal content by type (disclaimer, privacy_policy, terms_of_use)"""
+    try:
+        # Validate content type
+        valid_types = ['disclaimer', 'privacy_policy', 'terms_of_use']
+        if content_type not in valid_types:
+            return jsonify({'error': 'Invalid content type'}), 400
+        
+        legal_content = LegalContent.query.filter_by(
+            content_type=content_type, 
+            is_active=True
+        ).order_by(LegalContent.created_at.desc()).first()
+        
+        if legal_content:
+            return jsonify({
+                'success': True,
+                'data': {
+                    'id': legal_content.id,
+                    'title': legal_content.title,
+                    'content': legal_content.content,
+                    'version': legal_content.version,
+                    'is_active': legal_content.is_active,
+                    'created_at': legal_content.created_at.isoformat() if legal_content.created_at else None,
+                    'updated_at': legal_content.updated_at.isoformat() if legal_content.updated_at else None
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': True,
+                'data': None,
+                'message': f'No {content_type} content found'
+            }), 200
+            
+    except Exception as e:
+        print(f"Error getting legal content: {e}")
+        return jsonify({'error': 'Failed to get legal content'}), 500
+
+@app.route('/api/legal/<content_type>', methods=['PUT'])
+@require_auth
+def update_legal_content_by_type(content_type):
+    """Update legal content by type"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate content type
+        valid_types = ['disclaimer', 'privacy_policy', 'terms_of_use']
+        if content_type not in valid_types:
+            return jsonify({'error': 'Invalid content type'}), 400
+        
+        # Validate required fields
+        if 'content' not in data:
+            return jsonify({'error': 'Content is required'}), 400
+        
+        # Check if content exists
+        existing = LegalContent.query.filter_by(
+            content_type=content_type, 
+            is_active=True
+        ).order_by(LegalContent.created_at.desc()).first()
+        
+        if existing:
+            # Update existing content
+            existing.content = data['content']
+            existing.title = data.get('title', existing.title)
+            existing.updated_at = datetime.utcnow()
+        else:
+            # Create new content
+            new_content = LegalContent(
+                content_type=content_type,
+                title=data.get('title', ''),
+                content=data['content'],
+                version=data.get('version', '1.0'),
+                is_active=True
+            )
+            db.session.add(new_content)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{content_type.replace("_", " ").title()} updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating legal content: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update legal content'}), 500
+
+@app.route('/api/legal/all', methods=['GET'])
+def get_all_legal_content_by_type():
+    """Get all legal content"""
+    try:
+        results = LegalContent.query.filter_by(is_active=True).order_by(
+            LegalContent.content_type, 
+            LegalContent.created_at.desc()
+        ).all()
+        
+        legal_content = {}
+        for result in results:
+            content_type = result.content_type
+            if content_type not in legal_content:
+                legal_content[content_type] = {
+                    'id': result.id,
+                    'title': result.title,
+                    'content': result.content,
+                    'version': result.version,
+                    'is_active': result.is_active,
+                    'created_at': result.created_at.isoformat() if result.created_at else None,
+                    'updated_at': result.updated_at.isoformat() if result.updated_at else None
+                }
+        
+        return jsonify({
+            'success': True,
+            'data': legal_content
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting all legal content: {e}")
+        return jsonify({'error': 'Failed to get legal content'}), 500
+
+# Reviews API Endpoints
+@app.route('/api/reviews/verified', methods=['GET'])
+def get_verified_reviews():
+    """Get all verified user reviews"""
+    try:
+        reviews = db.session.execute(text("""
+            SELECT ur.id, ur.user_id, ur.review_type, ur.rating, ur.review_text, 
+                   ur.review_date, ur.is_verified, ur.admin_response, ur.admin_response_date,
+                   u.full_name, u.profile_image_url
+            FROM user_reviews ur
+            LEFT JOIN users u ON ur.user_id = u.id
+            WHERE ur.is_verified = true
+            ORDER BY ur.review_date DESC
+        """)).fetchall()
+        
+        reviews_data = []
+        for review in reviews:
+            reviews_data.append({
+                'id': review[0],
+                'user_id': review[1],
+                'review_type': review[2],
+                'rating': review[3],
+                'review_text': review[4],
+                'review_date': review[5].isoformat() if review[5] else None,
+                'is_verified': review[6],
+                'admin_response': review[7],
+                'admin_response_date': review[8].isoformat() if review[8] else None,
+                'author_name': review[9] or 'Anonymous User',
+                'author_avatar': review[10] or '/assets/default-avatar.png',
+                'author_role': 'User'  # Default role for user reviews
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': reviews_data
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting verified reviews: {e}")
+        return jsonify({'error': 'Failed to get verified reviews'}), 500
+
+# ==================== DATABASE SEEDING ====================
+
+def seed_subscription_plans():
+    """Seed the database with initial subscription plans and important features"""
+    
+    try:
+        # Check if data already exists
+        if SubscriptionPlan.query.count() > 0:
+            print("Subscription plans already exist, skipping seeding")
+            return
+        
+        print("Seeding subscription plans and important features...")
+        
+        # Create Free Plan
+        free_plan = SubscriptionPlan(
+            plan_name='Free Plan',
+            plan_type='free',
+            monthly_price=0.00,
+            yearly_price=0.00,
+            description='Perfect for getting started with basic property insights',
+            display_order=1
+        )
+        db.session.add(free_plan)
+        db.session.flush()
+        
+        # Add Free Plan features
+        free_features = [
+            'Price Prediction',
+            'Bookmark Prediction',
+            'Bookmark Address'
+        ]
+        
+        for i, feature in enumerate(free_features):
+            feature_obj = SubscriptionPlanFeature(
+                plan_id=free_plan.id,
+                feature_name=feature,
+                feature_description=f'Access to {feature.lower()} functionality',
+                is_included=True,
+                display_order=i + 1
+            )
+            db.session.add(feature_obj)
+        
+        # Create Premium Plan
+        premium_plan = SubscriptionPlan(
+            plan_name='Premium Plan',
+            plan_type='premium',
+            monthly_price=29.99,
+            yearly_price=299.99,
+            description='Advanced features for serious property investors',
+            is_popular=True,
+            display_order=2
+        )
+        db.session.add(premium_plan)
+        db.session.flush()
+        
+        # Add Premium Plan features
+        premium_features = [
+            'Price Prediction',
+            'Compare Prediction',
+            'Bookmark Prediction',
+            'Bookmark Address',
+            'Download Report'
+        ]
+        
+        for i, feature in enumerate(premium_features):
+            feature_obj = SubscriptionPlanFeature(
+                plan_id=premium_plan.id,
+                feature_name=feature,
+                feature_description=f'Advanced {feature.lower()} functionality',
+                is_included=True,
+                display_order=i + 1
+            )
+            db.session.add(feature_obj)
+        
+        # Create Agent Plan
+        agent_plan = SubscriptionPlan(
+            plan_name='Agent Plan',
+            plan_type='agent',
+            monthly_price=49.99,
+            yearly_price=499.99,
+            description='Professional tools for real estate agents',
+            display_order=3
+        )
+        db.session.add(agent_plan)
+        db.session.flush()
+        
+        # Add Agent Plan features
+        agent_features = [
+            'Agent Listing',
+            'Agent Regions'
+        ]
+        
+        for i, feature in enumerate(agent_features):
+            feature_obj = SubscriptionPlanFeature(
+                plan_id=agent_plan.id,
+                feature_name=feature,
+                feature_description=f'Professional {feature.lower()} management',
+                is_included=True,
+                display_order=i + 1
+            )
+            db.session.add(feature_obj)
+        
+        # Create Important Features for comparison
+        important_features = [
+            '24/7 Support',
+            'Mobile App Access',
+            'Email Notifications',
+            'Data Export',
+            'Advanced Analytics',
+            'Priority Support',
+            'API Access'
+        ]
+        
+        for i, feature in enumerate(important_features):
+            feature_obj = ImportantFeature(
+                feature_name=feature,
+                feature_description=f'Feature: {feature}',
+                display_order=i + 1
+            )
+            db.session.add(feature_obj)
+        
+        # Commit all changes
+        db.session.commit()
+        
+        print("✅ Successfully seeded subscription plans and important features!")
+        print(f"Created {SubscriptionPlan.query.count()} subscription plans")
+        print(f"Created {SubscriptionPlanFeature.query.count()} plan features")
+        print(f"Created {ImportantFeature.query.count()} important features")
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error seeding database: {e}")
+
+# Admin endpoint to manually seed data
+@app.route('/api/admin/seed-subscription-plans', methods=['POST'])
+@require_auth
+def admin_seed_subscription_plans():
+    """Admin endpoint to manually seed subscription plans"""
+    try:
+        # Check if user is admin
+        user_id = request.user['user_id']
+        user = User.query.get(user_id)
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        # Clear existing data first
+        SubscriptionPlanFeature.query.delete()
+        SubscriptionPlan.query.delete()
+        ImportantFeature.query.delete()
+        db.session.commit()
+        
+        # Seed new data
+        seed_subscription_plans()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Subscription plans seeded successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to seed subscription plans'}), 500
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Create tables if they don't exist
+        seed_subscription_plans()  # Seed initial data
     app.run(debug=True, host='0.0.0.0', port=5000)
