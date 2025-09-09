@@ -129,6 +129,17 @@ CREATE TABLE bookmarks (
     user_id INTEGER NOT NULL,
     bookmark_type VARCHAR(20) CHECK (bookmark_type IN ('property', 'prediction', 'comparison')) NOT NULL,
     address VARCHAR(500) NOT NULL,
+    -- Primary property details (for all bookmark types)
+    floor_area NUMERIC(10,2),
+    level VARCHAR(50),
+    unit_number VARCHAR(50),
+    property_type VARCHAR(100),
+    -- Secondary property details (for comparisons)
+    address_2 VARCHAR(500),
+    floor_area_2 NUMERIC(10,2),
+    level_2 VARCHAR(50),
+    unit_number_2 VARCHAR(50),
+    property_type_2 VARCHAR(100),
     reference_id INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -479,3 +490,13 @@ CREATE TRIGGER update_business_inquiries_updated_at BEFORE UPDATE ON business_in
 
 -- Update team_members.image_url to TEXT to support base64 data URLs
 ALTER TABLE team_members ALTER COLUMN image_url TYPE TEXT;
+
+INSERT INTO howitworks_properties
+  (id, property_order, title, address, level, unit_area, property_type, image_url, is_active)
+VALUES
+  (1, 1, 'Sample Title', '123 Example St', 'Level 1', '100 sqm', 'Apartment', NULL, true)
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO howitworks_properties (id, property_order, title, address, level, unit_area, property_type, image_url, is_active) VALUES
+  (2, 2, 'Sample Title 2', '456 Example Ave', 'Level 5', '85 sqm', 'Condo', NULL, true),
+  (3, 3, 'Sample Title 3', '789 Example Rd', 'Level 10', '120 sqm', 'HDB', NULL, true)
+ON CONFLICT (id) DO NOTHING;
