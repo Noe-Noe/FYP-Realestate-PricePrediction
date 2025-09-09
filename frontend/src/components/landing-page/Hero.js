@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import './Hero.css';
 import heroBackground from '../../hero.png';
-import api from '../../services/api';
+import api, { BACKEND_ORIGIN } from '../../services/api';
 
 const Hero = () => {
   const [heroContent, setHeroContent] = useState({
     headline: 'Smarter Property Insights.<br />Backed by Data.',
     subheading: 'Unlock Accurate Property Value — Instantly.',
     hero_background_url: heroBackground,
-    marketing_video_url: 'http://localhost:3845/assets/marketing-video.mp4',
+    marketing_video_url: '',
     button_text: 'Login to get Started',
     button_url: '/login'
   });
@@ -24,10 +24,10 @@ const Hero = () => {
           const content = response.hero_content;
           // Convert relative URLs to full URLs for uploaded files
           if (content.hero_background_url && content.hero_background_url.startsWith('/admin/')) {
-            content.hero_background_url = `http://localhost:5000${content.hero_background_url}`;
+            content.hero_background_url = `${BACKEND_ORIGIN}${content.hero_background_url}`;
           }
           if (content.marketing_video_url && content.marketing_video_url.startsWith('/admin/')) {
-            content.marketing_video_url = `http://localhost:5000${content.marketing_video_url}`;
+            content.marketing_video_url = `${BACKEND_ORIGIN}${content.marketing_video_url}`;
           }
           setHeroContent(content);
         }
@@ -86,13 +86,12 @@ const Hero = () => {
 
             {/* Right Side - Video */}
             <div className="hero-right">
-              <video className="hero-video" autoPlay muted loop>
-                <source
-                  src={heroContent.marketing_video_url}
-                  type="video/mp4"
-                />
-                Your browser does not support the video tag.
-              </video>
+              {heroContent.marketing_video_url && (
+                <video className="hero-video" autoPlay muted loop playsInline controls>
+                  <source src={heroContent.marketing_video_url} />
+                  Your browser does not support the video tag.
+                </video>
+              )}
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApi } from '../context/ApiContext';
+import { BACKEND_ORIGIN } from '../services/api';
 
 const ApiTest = () => {
   const { 
@@ -170,8 +171,8 @@ const ApiTest = () => {
         borderRadius: '8px'
       }}>
         <h3>API Status</h3>
-        <p><strong>Backend URL:</strong> http://localhost:5000</p>
-        <p><strong>Frontend URL:</strong> http://localhost:3000</p>
+        <p><strong>Backend URL:</strong> {BACKEND_ORIGIN || '(same-origin)'}</p>
+        <p><strong>Frontend URL:</strong> {typeof window !== 'undefined' ? window.location.origin : ''}</p>
         <p><strong>Connection:</strong> {error ? '❌ Error' : '✅ Connected'}</p>
       </div>
     </div>

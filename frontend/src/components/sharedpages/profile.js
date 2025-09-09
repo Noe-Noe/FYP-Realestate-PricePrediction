@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../../context/ApiContext';
 import { authAPI } from '../../services/api';
+import { BACKEND_ORIGIN } from '../../services/api';
 import Header from './header';
 import Navbar from './navbar';
 import Footer from './footer';
@@ -693,12 +694,12 @@ const Profile = () => {
                     {licensePictureUrl.endsWith('.pdf') ? (
                       <div className="profile-license-pdf">
                         <p>📄 PDF Document: {licensePictureUrl.split('/').pop()}</p>
-                        <a href={`http://localhost:5000${licensePictureUrl}`} target="_blank" rel="noopener noreferrer" className="profile-license-view-btn">
+                        <a href={`${BACKEND_ORIGIN || ''}${licensePictureUrl}`} target="_blank" rel="noopener noreferrer" className="profile-license-view-btn">
                           View PDF
                         </a>
                       </div>
                     ) : (
-                      <img src={`http://localhost:5000${licensePictureUrl}`} alt="License Preview" />
+                      <img src={`${BACKEND_ORIGIN || ''}${licensePictureUrl}`} alt="License Preview" />
                     )}
                     <div className="profile-license-actions">
                       <button 

@@ -3,7 +3,7 @@ import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import './EditHeroSection.css';
-import api from '../../services/api';
+import api, { BACKEND_ORIGIN } from '../../services/api';
 
 const EditHeroSection = () => {
   const [activeTab, setActiveTab] = useState('content');
@@ -32,13 +32,13 @@ const EditHeroSection = () => {
           // Convert relative URLs to full URLs for display
           const backgroundUrl = content.hero_background_url 
             ? (content.hero_background_url.startsWith('/admin/') 
-                ? `http://localhost:5000${content.hero_background_url}` 
+                ? `${BACKEND_ORIGIN}${content.hero_background_url}` 
                 : content.hero_background_url)
             : '/hero-background.jpg';
             
           const videoUrl = content.marketing_video_url 
             ? (content.marketing_video_url.startsWith('/admin/') 
-                ? `http://localhost:5000${content.marketing_video_url}` 
+                ? `${BACKEND_ORIGIN}${content.marketing_video_url}` 
                 : content.marketing_video_url)
             : '/marketing-video.jpg';
           
@@ -81,7 +81,7 @@ const EditHeroSection = () => {
         if (response.success) {
           // Convert relative URL to full URL for display
           const fullUrl = response.file_url.startsWith('/admin/') 
-            ? `http://localhost:5000${response.file_url}` 
+            ? `${BACKEND_ORIGIN}${response.file_url}` 
             : response.file_url;
           
           setFormData(prev => ({
@@ -117,7 +117,35 @@ const EditHeroSection = () => {
             ...prev,
             marketingVideo: fullUrl
           }));
-          setMessage('Marketing video uploaded successfully!');
+          setMessage('Marketing video uploaded successfully! Saving to hero content...');
+
+          // Immediately persist the new video URL to backend so landing page reflects it
+          const backgroundUrlForSave = formData.backgroundImage && formData.backgroundImage.startsWith('http://localhost:5000/admin/')
+            ? formData.backgroundImage.replace('http://localhost:5000', '')
+            : formData.backgroundImage;
+
+          const videoUrlForSave = fullUrl.startsWith('http://localhost:5000/admin/')
+            ? fullUrl.replace('http://localhost:5000', '')
+            : fullUrl;
+
+          const contentData = {
+            headline: formData.headline,
+            subheading: formData.subheading,
+            hero_background_url: backgroundUrlForSave,
+            marketing_video_url: videoUrlForSave,
+            button_text: formData.buttonText,
+            button_url: formData.buttonUrl
+          };
+
+          try {
+            const saveResp = await api.hero.updateContent(contentData);
+            if (saveResp.success) {
+              setMessage('Marketing video uploaded and saved successfully!');
+            }
+          } catch (saveErr) {
+            console.error('Error auto-saving video URL:', saveErr);
+            setMessage(`Video uploaded, but failed to save content: ${saveErr.message}`);
+          }
         }
       } catch (error) {
         console.error('Error uploading video:', error);
@@ -134,12 +162,12 @@ const EditHeroSection = () => {
       setMessage('');
 
       // Convert full URLs back to relative URLs for database storage
-      const backgroundUrl = formData.backgroundImage.startsWith('http://localhost:5000/admin/') 
-        ? formData.backgroundImage.replace('http://localhost:5000', '') 
+      const backgroundUrl = formData.backgroundImage.startsWith(`${BACKEND_ORIGIN}/admin/`) 
+        ? formData.backgroundImage.replace(BACKEND_ORIGIN, '') 
         : formData.backgroundImage;
       
-      const videoUrl = formData.marketingVideo.startsWith('http://localhost:5000/admin/') 
-        ? formData.marketingVideo.replace('http://localhost:5000', '') 
+      const videoUrl = formData.marketingVideo.startsWith(`${BACKEND_ORIGIN}/admin/`) 
+        ? formData.marketingVideo.replace(BACKEND_ORIGIN, '') 
         : formData.marketingVideo;
 
       const contentData = {
@@ -268,16 +296,20 @@ const EditHeroSection = () => {
             <div className="edit-hero-form-group">
               <label className="edit-hero-form-label">Marketing Video</label>
               <div className="edit-hero-image-preview-container">
-                <img
-                  src={formData.marketingVideo}
-                  alt="Marketing video"
-                  className="edit-hero-background-preview"
-                />
+                {formData.marketingVideo && (formData.marketingVideo.endsWith('.mp4') || formData.marketingVideo.endsWith('.webm') || formData.marketingVideo.endsWith('.ogg') || formData.marketingVideo.startsWith('http')) ? (
+                  <video src={formData.marketingVideo} className="edit-hero-background-preview" controls muted playsInline />
+                ) : (
+                  <img
+                    src={formData.marketingVideo}
+                    alt="Marketing video"
+                    className="edit-hero-background-preview"
+                  />
+                )}
                 <div className="edit-hero-image-upload-section">
                   <input
                     type="file"
                     id="video-upload"
-                    accept="image/*,video/*"
+                    accept="video/*,image/*"
                     onChange={handleVideoUpload}
                     className="edit-hero-file-input"
                   />

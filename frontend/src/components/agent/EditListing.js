@@ -4,6 +4,7 @@ import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import { agentAPI } from '../../services/api';
+import { BACKEND_ORIGIN } from '../../services/api';
 import { GOOGLE_MAPS_API_KEY } from '../../config/maps';
 import './agent-common.css';
 import './EditListing.css';
@@ -509,12 +510,12 @@ const EditListing = () => {
         })(),
         images: [
           ...uploadedImages.map(img => ({
-            url: img.url.startsWith('http') ? img.url : `http://localhost:5000${img.url}`,
+            url: img.url && img.url.startsWith('http') ? img.url : `${BACKEND_ORIGIN || ''}${img.url}`,
             name: img.name,
             is_primary: false
           })),
           ...newImages.map((img, index) => ({
-            url: `http://localhost:5000${img.url}`,
+            url: img.url && img.url.startsWith('http') ? img.url : `${BACKEND_ORIGIN || ''}${img.url}`,
             name: img.original_name || img.filename,
             is_primary: uploadedImages.length === 0 && index === 0 // First new image is primary if no existing images
           }))
@@ -926,7 +927,7 @@ const EditListing = () => {
                         {newImages.map((image, index) => (
                           <div key={index} className="edit-listing-new-image-item">
                             <img
-                              src={`http://localhost:5000${image.url}`}
+                              src={image.url && image.url.startsWith('http') ? image.url : `${BACKEND_ORIGIN || ''}${image.url}`}
                               alt={`New ${index + 1}`}
                               className="edit-listing-new-image"
                             />

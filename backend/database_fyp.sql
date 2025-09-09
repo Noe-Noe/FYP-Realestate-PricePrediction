@@ -156,6 +156,9 @@ CREATE TABLE user_reviews (
     rating INTEGER CHECK (rating >= 1 AND rating <= 5),
     review_text TEXT,
     review_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Admin response fields (for public reply)
+    admin_response TEXT,
+    admin_response_date TIMESTAMP,
     is_verified BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -307,7 +310,7 @@ CREATE TABLE IF NOT EXISTS hero_content (
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
+);
 
 CREATE TABLE IF NOT EXISTS howitworks_properties (
     id SERIAL PRIMARY KEY,

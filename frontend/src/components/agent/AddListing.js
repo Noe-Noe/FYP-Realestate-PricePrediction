@@ -4,6 +4,7 @@ import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import { agentAPI } from '../../services/api';
+import { BACKEND_ORIGIN } from '../../services/api';
 import { GOOGLE_MAPS_API_KEY } from '../../config/maps';
 import './agent-common.css';
 import './AddListing.css';
@@ -271,7 +272,7 @@ const AddListing = () => {
           return backendAmenities;
         })(),
         images: uploadedImages.map((image, index) => ({
-          url: `http://localhost:5000${image.url}`,
+          url: image.url && image.url.startsWith('http') ? image.url : `${BACKEND_ORIGIN || ''}${image.url}`,
           name: image.original_name || image.filename,
           is_primary: index === 0 // First image is primary
         }))
@@ -640,7 +641,7 @@ const AddListing = () => {
                       {uploadedImages.map((image, index) => (
                         <div key={index} className="add-listing-image-preview">
                           <img
-                            src={`http://localhost:5000${image.url}`}
+                            src={image.url && image.url.startsWith('http') ? image.url : `${BACKEND_ORIGIN || ''}${image.url}`}
                             alt={`Preview ${index + 1}`}
                             className="add-listing-preview-image"
                           />

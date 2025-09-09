@@ -1,4 +1,13 @@
-const API_BASE_URL = 'http://localhost:5000/api';
+// Resolve backend origin with environment variable fallback
+export const BACKEND_ORIGIN =
+  (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_ORIGIN) ||
+  (typeof window !== 'undefined' && window.__BACKEND_ORIGIN__) ||
+  (typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost'
+    ? 'http://localhost:5000'
+    : '');
+
+// If BACKEND_ORIGIN is empty (same-origin deployments), API calls will use relative paths
+const API_BASE_URL = BACKEND_ORIGIN ? `${BACKEND_ORIGIN}/api` : '/api';
 
 // Helper function for API calls
 const apiCall = async (endpoint, method = 'GET', data = null) => {

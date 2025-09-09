@@ -378,7 +378,7 @@ def generate_otp():
 def send_otp_email(email, otp):
     try:
         msg = Message(
-            'Your FYP App Verification Code',
+            'Your Valuez Verification Code',
             sender='bearmeh00@gmail.com',  # ← Now matches your MAIL_USERNAME
             recipients=[email]
         )
@@ -4859,7 +4859,7 @@ def get_hero_content():
                    marketing_video_url, button_text, button_url
             FROM hero_content 
             WHERE is_active = true
-            ORDER BY created_at DESC
+            ORDER BY updated_at DESC
             LIMIT 1
         """)).fetchone()
         
@@ -4892,7 +4892,7 @@ def get_hero_content_by_section(section_name):
                    marketing_video_url, button_text, button_url
             FROM hero_content 
             WHERE section_name = :section_name AND is_active = true
-            ORDER BY created_at DESC
+            ORDER BY updated_at DESC
             LIMIT 1
         """), {'section_name': section_name}).fetchone()
         
