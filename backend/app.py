@@ -33,7 +33,7 @@ def validate_user_type(user_type):
     """Validate user type against database constraints"""
     valid_types = ['free', 'premium', 'agent', 'admin']
     return user_type.lower() in valid_types
-
+#test
 # JWT Helper Functions
 def create_access_token(user_id, email, user_type):
     """Create JWT access token"""
@@ -6161,6 +6161,45 @@ def admin_seed_subscription_plans():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to seed subscription plans'}), 500
+    
+# ============================
+# ML Prediction Endpoint
+# ============================
+from flask import Flask, request, jsonify
+import joblib
+import numpy as np
+import os
+
+# Load the model only once when the app starts
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'real_estate_model_enhanced_20251003_0044.pkl')
+model = joblib.load(MODEL_PATH)
+
+@app.route('/api/predict', methods=['POST'])
+def predict():
+    """
+    Expects JSON like:
+    {
+        "features": [1200, 3, 2, 1, 5]   # numerical input for model
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data or "features" not in data:
+            return jsonify({"error": "Missing 'features' in request"}), 400
+
+        features = np.array(data["features"]).reshape(1, -1)
+        prediction = model.predict(features)[0]
+
+        return jsonify({
+            "status": "success",
+            "prediction": float(prediction)
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
 
 if __name__ == '__main__':
     with app.app_context():
