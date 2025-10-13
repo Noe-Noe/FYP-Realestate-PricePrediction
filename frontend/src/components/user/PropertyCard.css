@@ -1,0 +1,616 @@
+.property-card-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid #e5e7eb;
+}
+
+.property-card-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #3b82f6;
+  padding-bottom: 8px;
+}
+
+/* Price Section */
+.property-card-price-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.property-card-price-item {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 16px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.property-card-price-info h3 {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+  opacity: 0.9;
+}
+
+.property-card-price-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.property-card-price-image {
+  font-size: 2rem;
+}
+
+/* Details Section */
+.property-card-details-section {
+  margin-bottom: 24px;
+}
+
+.property-card-details-section h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 16px;
+}
+
+.property-card-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.property-card-detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.property-card-detail-item:last-child {
+  border-bottom: none;
+}
+
+.property-card-detail-label {
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.property-card-detail-value {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+/* Market Trend Section */
+.property-card-market-trend-section {
+  margin-bottom: 24px;
+}
+
+.property-card-market-trend-section h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.property-card-trend-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.property-card-trend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.property-card-trend-percentage {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.property-card-trend-period {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.property-card-trend-chart {
+  height: 60px;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+/* Transactions Section */
+.property-card-transactions-section {
+  margin-bottom: 24px;
+}
+
+.property-card-transactions-section h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 16px;
+}
+
+.property-card-transactions-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.property-card-table-header {
+  background: #f9fafb;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+  padding: 12px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.property-card-table-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+  padding: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.property-card-table-row:last-child {
+  border-bottom: none;
+}
+
+.property-card-table-cell {
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.property-card-see-more {
+  text-align: center;
+  padding: 12px;
+  color: #3b82f6;
+  font-weight: 500;
+  cursor: pointer;
+  border-top: 1px solid #e5e7eb;
+}
+
+.property-card-see-more:hover {
+  background: #f3f4f6;
+}
+
+/* View Details Button */
+.property-card-view-details-btn {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.property-card-view-details-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+}
+
+/* Price Statistics */
+.property-card-price-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.property-card-stat-item {
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.property-card-stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.property-card-stat-label {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+.property-card-stat-description {
+  font-weight: 400;
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* Location Section */
+.property-card-location-section {
+  margin-bottom: 24px;
+}
+
+.property-card-location-section h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 16px;
+}
+
+.property-card-map-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.property-card-map-tab {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.property-card-map-tab:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.property-card-map-tab.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.property-card-map-container {
+  height: 300px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* Amenities Panel */
+.property-card-amenities-panel {
+  margin-top: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.property-card-amenities-header {
+  background: #f9fafb;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.property-card-amenities-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 12px;
+}
+
+.property-card-amenity-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.property-card-amenity-chip {
+  padding: 4px 12px;
+  border: 1px solid #d1d5db;
+  background: white;
+  border-radius: 16px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.property-card-amenity-chip:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.property-card-amenity-chip.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.property-card-amenities-loading,
+.property-card-amenities-error,
+.property-card-amenities-empty {
+  padding: 16px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.property-card-amenities-error {
+  color: #ef4444;
+}
+
+.property-card-amenities-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.property-card-amenity-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.property-card-amenity-item:last-child {
+  border-bottom: none;
+}
+
+.property-card-amenity-main {
+  flex: 1;
+}
+
+.property-card-amenity-name {
+  font-weight: 500;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.property-card-amenity-address {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.property-card-amenity-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.property-card-amenity-rating {
+  font-size: 0.875rem;
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.property-card-amenity-distance {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.property-card-amenity-link {
+  font-size: 0.75rem;
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.property-card-amenity-link:hover {
+  text-decoration: underline;
+}
+
+/* Listings Section */
+.property-card-listings-section {
+  margin-bottom: 24px;
+}
+
+.property-card-listings-section h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 16px;
+}
+
+.property-card-filter-info {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  border-left: 3px solid #3b82f6;
+}
+
+.property-card-listings-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.property-card-listings-loading,
+.property-card-listings-error,
+.property-card-listings-empty {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.property-card-listings-error {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.property-card-listings-empty {
+  color: #6b7280;
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+/* Agents Section */
+.property-card-agents-section {
+  margin-bottom: 24px;
+}
+
+.property-card-agents-section h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.property-card-agents-note {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.property-card-agents-list {
+  display: grid;
+  gap: 12px;
+}
+
+.property-card-agent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.property-card-agent-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #3b82f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.property-card-agent-info {
+  flex: 1;
+}
+
+.property-card-agent-name {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 2px;
+}
+
+.property-card-agent-company {
+  font-size: 0.875rem;
+  color: #3b82f6;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.property-card-agent-license {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+.property-card-agent-experience {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.property-card-agent-contact {
+  text-align: right;
+  font-size: 0.75rem;
+}
+
+.property-card-agent-phone {
+  color: #059669;
+  margin-bottom: 2px;
+}
+
+.property-card-agent-email {
+  color: #3b82f6;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .property-card-container {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .property-card-price-section {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .property-card-details-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .property-card-detail-item {
+    padding: 10px 12px;
+  }
+
+  .property-card-price-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .property-card-map-tabs {
+    flex-direction: column;
+  }
+
+  .property-card-table-header,
+  .property-card-table-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .property-card-table-header {
+    display: none;
+  }
+
+  .property-card-table-cell {
+    padding: 4px 0;
+  }
+
+  .property-card-table-cell:before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+    color: #6b7280;
+  }
+}

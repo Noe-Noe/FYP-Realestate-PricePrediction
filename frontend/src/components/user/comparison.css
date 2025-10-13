@@ -1,0 +1,180 @@
+/* Comparison Styles - Using consistent layout */
+
+/* Breadcrumb */
+.comparison-breadcrumb {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+/* Content Header */
+.comparison-content-header {
+  margin-bottom: 1.5rem;
+}
+
+.comparison-main-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+/* Action Buttons */
+.comparison-action-buttons {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.comparison-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: fit-content;
+}
+
+.comparison-action-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.comparison-btn-icon {
+  font-size: 1rem;
+}
+
+.comparison-download-btn {
+  color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.comparison-download-btn:hover {
+  background: #3b82f6;
+  color: white;
+}
+
+.comparison-bookmark-btn {
+  color: #059669;
+  border-color: #059669;
+}
+
+.comparison-bookmark-btn:hover {
+  background: #059669;
+  color: white;
+}
+
+/* Property Comparison */
+.comparison-property-comparison {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+
+
+/* VS Indicator */
+.comparison-vs-indicator {
+  background: #3b82f6;
+  color: white;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.5rem;
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+  margin-top: 2rem;
+  align-self: center;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .comparison-property-comparison {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .comparison-vs-indicator {
+    align-self: center;
+    margin: 1rem 0;
+  }
+  
+  .comparison-table-header,
+  .comparison-table-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .comparison-table-cell {
+    border-right: none;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  
+  .comparison-table-cell:last-child {
+    border-bottom: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .comparison-main-content {
+    padding: 1rem;
+  }
+  
+
+  
+  .comparison-action-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .comparison-action-btn {
+    width: auto;
+  }
+  
+
+  
+  .comparison-map-tabs {
+    flex-wrap: wrap;
+  }
+  
+  .comparison-map-tab {
+    flex: 1;
+    min-width: 100px;
+  }
+}
+
+@media (max-width: 480px) {
+  .comparison-main-content {
+    padding: 0.75rem;
+  }
+  
+
+  
+  .comparison-main-title {
+    font-size: 1.5rem;
+  }
+  
+
+  
+  .comparison-trend-percentage {
+    font-size: 1.5rem;
+  }
+  
+  .comparison-vs-indicator {
+    width: 60px;
+    height: 60px;
+    font-size: 1.25rem;
+  }
+}
+
+
