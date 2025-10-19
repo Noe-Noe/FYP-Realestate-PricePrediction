@@ -10,28 +10,30 @@ export const BACKEND_ORIGIN =
 const API_BASE_URL = BACKEND_ORIGIN ? `${BACKEND_ORIGIN}/api` : '/api';
 
 // Helper function for API calls
-const apiCall = async (endpoint, method = 'GET', data = null) => {
+const apiCall = async (endpoint, method = 'GET', data = null, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
   
   // Get JWT token from localStorage
   const token = localStorage.getItem('accessToken');
   
-  const options = {
+  const requestOptions = {
     method: method,
     headers: {
       'Content-Type': 'application/json',
       // Add Authorization header if token exists
       ...(token && { 'Authorization': `Bearer ${token}` }),
     },
+    // Merge with provided options (for AbortController, etc.)
+    ...options,
   };
   
   // Add body for non-GET requests
   if (data && method !== 'GET') {
-    options.body = JSON.stringify(data);
+    requestOptions.body = JSON.stringify(data);
   }
 
   try {
-    const response = await fetch(url, options);
+    const response = await fetch(url, requestOptions);
     
     if (!response.ok) {
       // Try to get error message from response
@@ -509,6 +511,10 @@ export const howitworksAPI = {
   updateProperty: async (propertyId, propertyData) => {
     return apiCall(`/howitworks/properties/${propertyId}`, 'PUT', propertyData);
   },
+  // Create HowItWorks property
+  createProperty: async (propertyData) => {
+    return apiCall('/howitworks/properties', 'POST', propertyData);
+  },
 };
 
 // Features API calls
@@ -628,14 +634,24 @@ export const contactAPI = {
 
 // Price Prediction API calls
 export const predictionAPI = {
-  // Create price prediction
-  create: async (predictionData) => {
-    return apiCall('/predictions', 'POST', predictionData);
+  // Generate ML-based price prediction
+  predictPrice: async (propertyData, options = {}) => {
+    return apiCall('/predict-price', 'POST', propertyData, options);
+  },
+
+  // Test ML prediction without authentication
+  predictPriceTest: async (propertyData, options = {}) => {
+    return apiCall('/predict-price-test', 'POST', propertyData, options);
   },
 
   // Get user predictions
   getUserPredictions: async (userId) => {
     return apiCall(`/predictions/user/${userId}`);
+  },
+
+  // Create price prediction (legacy method)
+  create: async (predictionData) => {
+    return apiCall('/predictions', 'POST', predictionData);
   },
 };
 

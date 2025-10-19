@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import './HowItWorks.css';
-import Navbar from './Navbar';
-import Footer from './Footer';
 import PropertyCard from '../user/PropertyCard';
 import api from '../../services/api';
 
@@ -98,13 +96,21 @@ const HowItWorks = () => {
 
 
   return (
-    <div className="howitworks-page">
-      <Navbar />
-
-      <section className="how-hero">
-        <h1 className="section-title" style={{ color: '#fff', marginTop: '4rem' }}>See How it Works</h1>
-      </section>
-
+    <section className="explore">
+      <h2 className="section-title">Explore Automated Valuations</h2>
+      <div className="explore-header">
+        <p className="section-subtitle">Estimate the value of your property now</p>
+      </div>
+      <div className="explore-types">
+        <div className="type-pill">
+          <span style={{ fontSize: '1.2rem', marginRight: '0.5rem' }}>🏢</span>
+          <span>Commercial</span>
+        </div>
+        <div className="type-pill">
+          <span style={{ fontSize: '1.2rem', marginRight: '0.5rem' }}>🏭</span>
+          <span>Industrial</span>
+        </div>
+      </div>
       {/* Card Grid */}
       <section className="how-grid">
         {loading ? (
@@ -249,8 +255,8 @@ const HowItWorks = () => {
         </section>
       )}
 
-      <Footer />
-    </div>
+      
+    </section>
   );
 };
 

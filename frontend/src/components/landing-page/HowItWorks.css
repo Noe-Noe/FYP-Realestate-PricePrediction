@@ -1,7 +1,6 @@
 /* How it Works page */
 .howitworks-page {
   background: var(--bg-tertiary);
-  min-height: 100vh;
 }
 
 .how-hero {
@@ -15,9 +14,9 @@
 .how-grid {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1rem 4rem;
+  padding: 2rem 1rem 2rem;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(275px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 1.5rem;
 }
 
@@ -209,7 +208,7 @@
 /* Responsive Design */
 @media (max-width: 900px) {
   .how-grid {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     padding: 1rem 1rem 2rem;
   }
   

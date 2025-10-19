@@ -4,6 +4,9 @@ import os
 import random
 import string
 import time
+import subprocess
+import json
+import sys
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask_mail import Mail, Message
@@ -17,7 +20,14 @@ from functools import wraps
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+# CORS configuration to allow frontend origins and Authorization header
+CORS(
+    app,
+    resources={r"/api/*": {"origins": "*"}},
+    supports_credentials=True,
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+)
 
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-super-secret-jwt-key-change-in-production')
@@ -5159,11 +5169,64 @@ def update_howitworks_property(property_id):
             'success': True,
             'message': 'Property updated successfully'
         }), 200
-        
+
     except Exception as e:
         print(f"Error updating HowItWorks property: {e}")
         db.session.rollback()
-        return jsonify({'error': 'Failed to update property'}), 500
+        return jsonify({'error': 'Failed to update HowItWorks property'}), 500
+
+@app.route('/api/howitworks/properties', methods=['POST'])
+@require_auth
+def create_howitworks_property():
+    """Create a new HowItWorks property"""
+    try:
+        data = request.get_json()
+
+        # Validate required fields
+        required_fields = ['title', 'address', 'property_type']
+        for field in required_fields:
+            if field not in data or data.get(field) is None:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+
+        # Determine property order; default append to end if not provided
+        provided_order = data.get('property_order')
+        if provided_order is None:
+            result = db.session.execute(text("""
+                SELECT COALESCE(MAX(property_order), 0) + 1 AS next_order
+                FROM howitworks_properties
+                WHERE is_active = true
+            """)).fetchone()
+            property_order = result.next_order if result else 1
+        else:
+            property_order = int(provided_order)
+
+        insert_result = db.session.execute(text("""
+            INSERT INTO howitworks_properties (property_order, title, address, level, unit_area, property_type, image_url, is_active, created_at, updated_at)
+            VALUES (:property_order, :title, :address, :level, :unit_area, :property_type, :image_url, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+        """), {
+            'property_order': property_order,
+            'title': data['title'],
+            'address': data['address'],
+            'level': data.get('level'),
+            'unit_area': data.get('unit_area'),
+            'property_type': data['property_type'],
+            'image_url': data.get('image_url')
+        })
+
+        new_id = insert_result.fetchone()[0]
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Property created successfully',
+            'id': new_id,
+            'property_order': property_order
+        }), 201
+    except Exception as e:
+        print(f"Error creating HowItWorks property: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create HowItWorks property'}), 500
 
 # Features Content API Endpoints
 
@@ -6161,6 +6224,496 @@ def admin_seed_subscription_plans():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to seed subscription plans'}), 500
+
+# -------------------------
+# ML PREDICTION ENDPOINTS
+# -------------------------
+
+# Global cache for ML data to avoid reloading on every request
+_ml_cache = {
+    'df_industrial': None,
+    'df_commercial_clean': None,
+    'all_addresses': None,
+    'ml_functions': None,
+    'postal_districts': None,
+    'last_cleanup': None
+}
+
+# Cache cleanup function to prevent memory leaks
+def cleanup_ml_cache():
+    """Clean up ML cache if it's been too long since last cleanup"""
+    import time
+    current_time = time.time()
+    
+    # Clean up cache every 30 minutes
+    if _ml_cache['last_cleanup'] is None or (current_time - _ml_cache['last_cleanup']) > 1800:
+        _ml_cache['df_industrial'] = None
+        _ml_cache['df_commercial_clean'] = None
+        _ml_cache['all_addresses'] = None
+        _ml_cache['postal_districts'] = None
+        _ml_cache['last_cleanup'] = current_time
+
+def run_ml_prediction(property_data):
+    """Run ML prediction using cached data approach"""
+    try:
+        import time
+        start_time = time.time()
+        
+        # Clean up cache if needed
+        cleanup_ml_cache()
+        
+        # Add the machinelearning directory to the path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        ml_dir = os.path.join(current_dir, '..', 'machinelearning')
+        sys.path.insert(0, ml_dir)
+        
+        # Import the enhanced ML functions directly (cache after first import)
+        if _ml_cache['ml_functions'] is None:
+            try:
+                from ml_predictor_enhanced import predict_for_propertycard, get_unique_addresses, get_enhanced_predictor
+                
+                # Initialize the enhanced predictor and load the model
+                import time
+                start_time = time.time()
+                enhanced_predictor = get_enhanced_predictor()
+                if enhanced_predictor.load_model():
+                    load_time = time.time() - start_time
+                    print(f"✅ Enhanced ML model loaded successfully in {load_time:.2f} seconds")
+                else:
+                    print("⚠️ Enhanced ML model failed to load, will use fallback predictions")
+                
+                _ml_cache['ml_functions'] = {
+                    'predict_for_propertycard': predict_for_propertycard,
+                    'get_unique_addresses': get_unique_addresses,
+                    'get_enhanced_predictor': get_enhanced_predictor
+                }
+                print("✅ Enhanced ML functions imported successfully")
+            except ImportError as e:
+                print(f"❌ Failed to import enhanced ML functions: {e}")
+                return {
+                    'success': False,
+                    'error': f'Failed to import enhanced ML predictor module: {e}'
+                }
+        
+        # Load datasets (cache after first load)
+        if _ml_cache['df_industrial'] is None:
+            import pandas as pd
+            
+            # Load industrial data with optimized settings
+            industrial_path = os.path.join(ml_dir, 'industrial_2022toSep2025.csv')
+            try:
+                import time
+                start_time = time.time()
+                # Load all columns and map to expected column names
+                df = pd.read_csv(industrial_path)
+                load_time = time.time() - start_time
+                print(f"📊 Industrial data loaded in {load_time:.2f} seconds ({len(df)} records)")
+                
+                # Map column names to what ML predictor expects
+                column_mapping = {
+                    'Street Name': 'street_name',
+                    'Project Name': 'project_name', 
+                    'Planning Area': 'planning_area',
+                    'Property Type': 'property_type',
+                    'Area': 'area',
+                    'Contract Date': 'contract_date',
+                    'Price': 'price',
+                    '$psm': 'unit_price_psm',  # Map PSM column
+                    'Postal District': 'postal_district'
+                }
+                
+                # Rename columns to match ML predictor expectations
+                df = df.rename(columns=column_mapping)
+                
+                # Clean up string columns - replace NaN with 'N.A.'
+                string_columns = ['street_name', 'project_name', 'planning_area', 'property_type']
+                for col in string_columns:
+                    if col in df.columns:
+                        df[col] = df[col].fillna('N.A.').astype(str)
+                
+                # Clean up price column (remove $ and commas)
+                if 'price' in df.columns:
+                    df['price'] = df['price'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
+                    df['price'] = pd.to_numeric(df['price'], errors='coerce')
+                
+                # Clean up unit price PSM column (remove $ and commas)
+                if 'unit_price_psm' in df.columns:
+                    df['unit_price_psm'] = df['unit_price_psm'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
+                    df['unit_price_psm'] = pd.to_numeric(df['unit_price_psm'], errors='coerce')
+                
+                # Clean up area column (convert from sqm to sqft for industrial data)
+                if 'area' in df.columns:
+                    df['area'] = pd.to_numeric(df['area'], errors='coerce')
+                    df['area'] = df['area'] * 10.764  # Convert sqm to sqft
+                
+                # Parse contract date - handle MM/DD/YYYY format for industrial data
+                if 'contract_date' in df.columns:
+                    df['contract_date'] = pd.to_datetime(df['contract_date'], format='%m/%d/%Y', errors='coerce')
+                
+                _ml_cache['df_industrial'] = df
+                print(f"✅ Successfully loaded industrial data: {len(df)} rows, columns: {list(df.columns)}")
+            except Exception as e:
+                print(f"❌ Failed to load industrial data: {e}")
+                return {
+                    'success': False,
+                    'error': f'Failed to load industrial data: {e}'
+                }
+        
+        # Load commercial data if not cached
+        if _ml_cache['df_commercial_clean'] is None:
+            try:
+                import time
+                start_time = time.time()
+                commercial_path = os.path.join(ml_dir, 'commercial(everything teeco)', 'CommercialTransaction20250917124317.csv')
+                df_commercial = pd.read_csv(commercial_path)
+                load_time = time.time() - start_time
+                print(f"📊 Commercial data loaded in {load_time:.2f} seconds ({len(df_commercial)} records)")
+                
+                # Map commercial column names to expected format
+                commercial_mapping = {
+                    'Project Name': 'project_name',
+                    'Street Name': 'street_name',
+                    'Property Type': 'property_type',
+                    'Transacted Price ($)': 'price',
+                    'Area (SQFT)': 'area',
+                    'Unit Price ($ PSF)': 'unit_price_psf',  # Map PSF column
+                    'Sale Date': 'contract_date',
+                    'Postal District': 'postal_district'
+                }
+                
+                # Rename columns
+                df_commercial = df_commercial.rename(columns=commercial_mapping)
+                
+                # Clean up string columns - replace NaN with 'N.A.'
+                string_columns = ['street_name', 'project_name', 'property_type']
+                for col in string_columns:
+                    if col in df_commercial.columns:
+                        df_commercial[col] = df_commercial[col].fillna('N.A.').astype(str)
+                
+                # Clean up price column
+                if 'price' in df_commercial.columns:
+                    df_commercial['price'] = df_commercial['price'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
+                    df_commercial['price'] = pd.to_numeric(df_commercial['price'], errors='coerce')
+                
+                # Clean up unit price PSF column (remove $ and commas)
+                if 'unit_price_psf' in df_commercial.columns:
+                    df_commercial['unit_price_psf'] = df_commercial['unit_price_psf'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
+                    df_commercial['unit_price_psf'] = pd.to_numeric(df_commercial['unit_price_psf'], errors='coerce')
+                
+                # Clean up area column (keep in sqft for commercial data)
+                if 'area' in df_commercial.columns:
+                    df_commercial['area'] = pd.to_numeric(df_commercial['area'], errors='coerce')
+                    # Keep in sqft (no conversion needed)
+                
+                # Parse sale date - handle custom format like "Sept-25", "Aug-25"
+                if 'contract_date' in df_commercial.columns:
+                    def parse_custom_date(date_str):
+                        try:
+                            if pd.isna(date_str):
+                                return pd.NaT
+                            
+                            # Handle formats like "Sept-25", "Aug-25"
+                            if isinstance(date_str, str) and '-' in date_str:
+                                month_str, year_str = date_str.split('-')
+                                month_map = {
+                                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                                    'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                                    'Sep': '09', 'Sept': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                                }
+                                month_num = month_map.get(month_str, '01')
+                                year = f"20{year_str}" if len(year_str) == 2 else year_str
+                                return pd.to_datetime(f"{year}-{month_num}-01")
+                            else:
+                                return pd.to_datetime(date_str, errors='coerce')
+                        except:
+                            return pd.NaT
+                    
+                    df_commercial['contract_date'] = df_commercial['contract_date'].apply(parse_custom_date)
+                
+                # Add planning area (set to 'Unknown' for commercial data)
+                df_commercial['planning_area'] = 'Unknown'
+                
+                _ml_cache['df_commercial_clean'] = df_commercial.dropna(subset=['price', 'area'])
+                print(f"✅ Successfully loaded commercial data: {len(df_commercial)} rows, columns: {list(df_commercial.columns)}")
+            except Exception as e:
+                print(f"❌ Warning: Could not load commercial data: {e}")
+                _ml_cache['df_commercial_clean'] = None
+        
+        # Get all addresses (cache after first calculation) - Optimized for speed
+        # Load postal districts if not cached
+        if _ml_cache['postal_districts'] is None:
+            try:
+                postal_districts_path = os.path.join(ml_dir, 'sg cordinates', 'sg_postal_districts.csv')
+                postal_districts_df = pd.read_csv(postal_districts_path)
+                
+                # Create postal district mapping
+                postal_districts = {}
+                for _, row in postal_districts_df.iterrows():
+                    district = row['Postal District']
+                    sectors = row['Postal Sector']
+                    
+                    # Parse sectors (e.g., "01, 02, 03" or "17")
+                    if ',' in sectors:
+                        sector_list = [s.strip() for s in sectors.split(',')]
+                    else:
+                        sector_list = [sectors.strip()]
+                    
+                    for sector in sector_list:
+                        postal_districts[sector] = district
+                
+                _ml_cache['postal_districts'] = postal_districts
+                print(f"✅ Loaded postal districts: {len(postal_districts)} sectors mapped")
+            except Exception as e:
+                print(f"⚠️ Failed to load postal districts: {e}")
+                _ml_cache['postal_districts'] = {}
+
+        if _ml_cache['all_addresses'] is None:
+            try:
+                industrial_addresses = _ml_cache['ml_functions']['get_unique_addresses'](_ml_cache['df_industrial'], "Industrial")
+                commercial_addresses = _ml_cache['ml_functions']['get_unique_addresses'](_ml_cache['df_commercial_clean'], "Commercial") if _ml_cache['df_commercial_clean'] is not None else []
+                # Limit addresses for faster processing
+                all_addresses = industrial_addresses + commercial_addresses
+                _ml_cache['all_addresses'] = all_addresses[:1000]  # Limit to first 1000 addresses for speed
+            except Exception as e:
+                return {
+                    'success': False,
+                    'error': f'Failed to get addresses: {e}'
+                }
+        
+        # Run prediction using enhanced ML predictor
+        try:
+            property_data_result, comparison_data_result, matched_address = _ml_cache['ml_functions']['predict_for_propertycard'](
+                frontend_property_data=property_data,
+                all_addresses=_ml_cache['all_addresses'],
+                df_industrial=_ml_cache['df_industrial'],
+                df_commercial=_ml_cache['df_commercial_clean'],
+                postal_districts=_ml_cache['postal_districts']
+            )
+            
+            # Return results
+            total_time = time.time() - start_time
+            print(f"⏱️ Total prediction time: {total_time:.2f} seconds")
+            
+            return {
+                'success': True,
+                'property_data': property_data_result,
+                'comparison_data': comparison_data_result,
+                'matched_address': matched_address
+            }
+            
+        except Exception as e:
+            print(f"❌ Prediction failed: {e}")
+            import traceback
+            print(f"❌ Traceback: {traceback.format_exc()}")
+            return {
+                'success': False,
+                'error': f'Prediction failed: {e}'
+            }
+            
+    except Exception as e:
+        print(f"❌ ML prediction error: {e}")
+        import traceback
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        return {
+            'success': False,
+            'error': f'ML prediction error: {str(e)}'
+        }
+
+@app.route('/api/predict-price', methods=['POST'])
+def predict_price():
+    """Generate ML-based price prediction for property"""
+    try:
+        # Get current user
+        token = request.headers.get('Authorization')
+        print(f"🔍 Authorization header: {token}")
+        
+        if not token or not token.startswith('Bearer '):
+            print("❌ No Bearer token found")
+            return jsonify({'error': 'Authorization token required'}), 401
+        
+        token = token.split(' ')[1]
+        print(f"🔍 JWT token: {token[:50]}...")
+        print(f"🔍 Secret key: {app.config.get('SECRET_KEY', 'NOT_SET')[:20]}...")
+        
+        try:
+            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+            user_id = payload['user_id']
+            print(f"✅ JWT decoded successfully, user_id: {user_id}")
+        except jwt.ExpiredSignatureError as e:
+            print(f"❌ Token expired: {e}")
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError as e:
+            print(f"❌ Invalid token: {e}")
+            return jsonify({'error': 'Invalid token'}), 401
+        
+        # Get property data from request
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        required_fields = ['propertyType', 'address', 'floorArea']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Prepare property data for ML prediction
+        property_data = {
+            'propertyType': data['propertyType'],
+            'address': data['address'],
+            'floorArea': str(data['floorArea']),
+            'level': data.get('level', 'Ground Floor'),
+            'unit': data.get('unit', 'N/A')
+        }
+        
+        # Run ML prediction
+        print(f"🔍 Running ML prediction for: {property_data}")
+        ml_result = run_ml_prediction(property_data)
+        print(f"🔍 ML result: {ml_result}")
+        
+        if not ml_result['success']:
+            print(f"❌ ML prediction failed: {ml_result['error']}")
+            return jsonify({'error': ml_result['error']}), 500
+        
+        # Extract prediction data
+        property_data_result = ml_result['property_data']
+        comparison_data_result = ml_result['comparison_data']
+        
+        # Save prediction to database
+        try:
+            # Convert estimated sales price to numeric
+            estimated_price = None
+            if comparison_data_result.get('estimatedSalesPrice') and comparison_data_result['estimatedSalesPrice'] != 'N/A':
+                price_str = comparison_data_result['estimatedSalesPrice'].replace('$', '').replace(',', '')
+                if 'M' in price_str:
+                    estimated_price = float(price_str.replace('M', '')) * 1000000
+                elif 'k' in price_str:
+                    estimated_price = float(price_str.replace('k', '')) * 1000
+                else:
+                    estimated_price = float(price_str)
+            
+            # Create prediction record
+            prediction = PricePrediction(
+                user_id=user_id,
+                property_address=property_data['address'],
+                property_type=property_data['propertyType'],
+                size_sqft=float(property_data['floorArea']),
+                predicted_price=estimated_price or 0,
+                confidence_score=85.0,  # Default confidence
+                search_parameters=json.dumps(property_data)
+            )
+            
+            db.session.add(prediction)
+            db.session.commit()
+            
+            # Add prediction ID to response
+            property_data_result['prediction_id'] = prediction.id
+            
+        except Exception as e:
+            print(f"Error saving prediction to database: {e}")
+            # Continue without saving to database
+        
+        # Return the prediction results
+        return jsonify({
+            'success': True,
+            'property_data': property_data_result,
+            'comparison_data': comparison_data_result,
+            'matched_address': ml_result.get('matched_address'),
+            'message': 'Price prediction generated successfully'
+        })
+        
+    except Exception as e:
+        print(f"Error in predict_price endpoint: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/predict-price-test', methods=['POST'])
+def predict_price_test():
+    """Test endpoint for ML prediction without authentication"""
+    try:
+        # Get property data from request
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        required_fields = ['propertyType', 'address', 'floorArea']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Prepare property data for ML prediction
+        property_data = {
+            'propertyType': data['propertyType'],
+            'address': data['address'],
+            'floorArea': str(data['floorArea']),
+            'level': data.get('level', 'Ground Floor'),
+            'unit': data.get('unit', 'N/A')
+        }
+        
+        # Run ML prediction
+        print(f"🔍 [TEST] Running ML prediction for: {property_data}")
+        ml_result = run_ml_prediction(property_data)
+        print(f"🔍 [TEST] ML result: {ml_result}")
+        
+        if not ml_result['success']:
+            print(f"❌ [TEST] ML prediction failed: {ml_result['error']}")
+            return jsonify({'error': ml_result['error']}), 500
+        
+        # Return the prediction results (without saving to database)
+        return jsonify({
+            'success': True,
+            'property_data': ml_result['property_data'],
+            'comparison_data': ml_result['comparison_data'],
+            'matched_address': ml_result.get('matched_address'),
+            'message': 'Test prediction generated successfully (not saved to database)'
+        })
+        
+    except Exception as e:
+        print(f"Error in predict_price_test endpoint: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/predictions/user/<int:user_id>', methods=['GET'])
+def get_user_predictions(user_id):
+    """Get all predictions for a specific user"""
+    try:
+        # Verify user access
+        token = request.headers.get('Authorization')
+        if not token or not token.startswith('Bearer '):
+            return jsonify({'error': 'Authorization token required'}), 401
+        
+        token = token.split(' ')[1]
+        try:
+            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+            if payload['user_id'] != user_id:
+                return jsonify({'error': 'Access denied'}), 403
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        
+        # Get user's predictions
+        predictions = PricePrediction.query.filter_by(user_id=user_id).order_by(PricePrediction.prediction_date.desc()).all()
+        
+        predictions_data = []
+        for pred in predictions:
+            predictions_data.append({
+                'id': pred.id,
+                'property_address': pred.property_address,
+                'property_type': pred.property_type,
+                'size_sqft': float(pred.size_sqft),
+                'predicted_price': float(pred.predicted_price),
+                'confidence_score': float(pred.confidence_score) if pred.confidence_score else None,
+                'prediction_date': pred.prediction_date.isoformat(),
+                'search_parameters': json.loads(pred.search_parameters) if pred.search_parameters else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'predictions': predictions_data,
+            'count': len(predictions_data)
+        })
+        
+    except Exception as e:
+        print(f"Error in get_user_predictions endpoint: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     with app.app_context():

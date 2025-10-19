@@ -78,8 +78,7 @@ const Navbar = () => {
         {/* Desktop navigation menu */}
         <ul className={`navbar-menu ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
           <li><a href="/" onClick={(e) => handleNavigation(e, '/')}>Home</a></li>
-          <li><a href="/#intro" onClick={(e) => handleNavigation(e, '/#intro')}>Introduction</a></li>
-          <li><a href="/how-it-works" onClick={(e) => handleNavigation(e, '/how-it-works')}>See How it Works</a></li>
+          <li><a href="/#howitworks" onClick={(e) => handleNavigation(e, '/#howitworks')}>Explore</a></li>
           <li><a href="/#plans" onClick={(e) => handleNavigation(e, '/#plans')}>Subscription Plans</a></li>
           <li><a href="/#faq" onClick={(e) => handleNavigation(e, '/#faq')}>FAQ</a></li>
           <li><a href="/#reviews" onClick={(e) => handleNavigation(e, '/#reviews')}>Reviews</a></li>
