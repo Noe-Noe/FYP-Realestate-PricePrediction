@@ -88,6 +88,17 @@ class AgentProfile(db.Model):
     # Track first-time agent onboarding status
     first_time_agent = db.Column(db.Boolean, default=True)
 
+class Region(db.Model):
+    __tablename__ = 'regions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    district = db.Column(db.String(10), nullable=False)
+    sector = db.Column(db.String(100), nullable=False)
+    location = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class AgentRegion(db.Model):
     __tablename__ = 'agent_regions'
     

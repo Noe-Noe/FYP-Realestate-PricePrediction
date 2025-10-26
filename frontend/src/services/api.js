@@ -325,6 +325,27 @@ export const authAPI = {
       feedback_id: feedbackId
     });
   },
+
+  // Regions Management API calls
+  getAllRegions: async () => {
+    return apiCall('/admin/regions');
+  },
+
+  getRegionById: async (regionId) => {
+    return apiCall(`/admin/regions/${regionId}`);
+  },
+
+  createRegion: async (regionData) => {
+    return apiCall('/admin/regions', 'POST', regionData);
+  },
+
+  updateRegion: async (regionId, regionData) => {
+    return apiCall(`/admin/regions/${regionId}`, 'PUT', regionData);
+  },
+
+  deleteRegion: async (regionId) => {
+    return apiCall(`/admin/regions/${regionId}`, 'DELETE');
+  },
 };
 
 // Properties API calls

@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask_mail import Mail, Message
-from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature
+from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, Region, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature
 from sqlalchemy import text
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -3197,22 +3197,25 @@ def complete_user_onboarding():
     """Mark user as having completed first-time onboarding"""
     try:
         current_user = request.user
-        data = request.get_json()
+        user_id = current_user['user_id']
         
         # Update user's first_time_user status
-        user = User.query.get(current_user['user_id'])
+        user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
         user.first_time_user = False
         db.session.commit()
         
+        print(f"Successfully completed user onboarding for user {user_id}")
         return jsonify({'message': 'Onboarding completed successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
+        import traceback
         print(f"Error completing user onboarding: {e}")
-        return jsonify({'error': 'Failed to complete onboarding'}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to complete onboarding: {str(e)}'}), 500
 
 @app.route('/api/onboarding/complete-agent', methods=['POST'])
 @require_auth
@@ -3220,25 +3223,40 @@ def complete_agent_onboarding():
     """Mark agent as having completed first-time region selection"""
     try:
         current_user = request.user
-        data = request.get_json()
+        user_id = current_user['user_id']
         
         # Verify user is an agent
-        user = User.query.get(current_user['user_id'])
-        if not user or user.user_type != 'agent':
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if user.user_type != 'agent':
             return jsonify({'error': 'User is not an agent'}), 403
         
-        # Update agent profile's first_time_agent status
-        agent_profile = AgentProfile.query.filter_by(user_id=current_user['user_id']).first()
-        if agent_profile:
-            agent_profile.first_time_agent = False
-            db.session.commit()
+        # Get or create agent profile
+        agent_profile = AgentProfile.query.filter_by(user_id=user_id).first()
+        if not agent_profile:
+            # Create agent profile if it doesn't exist
+            print(f"Agent profile not found for user {user_id}, creating one...")
+            agent_profile = AgentProfile(
+                user_id=user_id,
+                first_time_agent=False
+            )
+            db.session.add(agent_profile)
         
+        # Update agent profile's first_time_agent status
+        agent_profile.first_time_agent = False
+        db.session.commit()
+        
+        print(f"Successfully completed agent onboarding for user {user_id}")
         return jsonify({'message': 'Agent onboarding completed successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
+        import traceback
         print(f"Error completing agent onboarding: {e}")
-        return jsonify({'error': 'Failed to complete agent onboarding'}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to complete agent onboarding: {str(e)}'}), 500
 
 @app.route('/api/onboarding/agent-status', methods=['GET'])
 @require_auth
@@ -3428,49 +3446,45 @@ def update_agent_regions():
         # Delete existing regions for this agent
         AgentRegion.query.filter_by(agent_id=current_user['user_id']).delete()
         
-        # Add new regions
-        for region_id in selected_regions:
-            # Map region ID to region data
-            region_map = {
-                1: {'name': 'District 1', 'type': 'district', 'value': 'Raffles Place, Cecil, Marina, People\'s Park'},
-                2: {'name': 'District 2', 'type': 'district', 'value': 'Anson, Tanjong Pagar'},
-                3: {'name': 'District 3', 'type': 'district', 'value': 'Queenstown, Tiong Bahru'},
-                4: {'name': 'District 4', 'type': 'district', 'value': 'Telok Blangah, Harbourfront'},
-                5: {'name': 'District 5', 'type': 'district', 'value': 'Pasir Panjang, Hong Leong Garden, Clementi New Town'},
-                6: {'name': 'District 6', 'type': 'district', 'value': 'High Street, Beach Road (part)'},
-                7: {'name': 'District 7', 'type': 'district', 'value': 'Middle Road, Golden Mile'},
-                8: {'name': 'District 8', 'type': 'district', 'value': 'Little India'},
-                9: {'name': 'District 9', 'type': 'district', 'value': 'Orchard, Cairnhill, River Valley'},
-                10: {'name': 'District 10', 'type': 'district', 'value': 'Ardmore, Bukit Timah, Holland Road, Tanglin'},
-                11: {'name': 'District 11', 'type': 'district', 'value': 'Watten Estate, Novena, Thomson'},
-                12: {'name': 'District 12', 'type': 'district', 'value': 'Balestier, Toa Payoh, Serangoon'},
-                13: {'name': 'District 13', 'type': 'district', 'value': 'Macpherson, Braddell'},
-                14: {'name': 'District 14', 'type': 'district', 'value': 'Geylang, Eunos'},
-                15: {'name': 'District 15', 'type': 'district', 'value': 'Katong, Joo Chiat, Amber Road'},
-                16: {'name': 'District 16', 'type': 'district', 'value': 'Bedok, Upper East Coast, Eastwood, Kew Drive'},
-                17: {'name': 'District 17', 'type': 'district', 'value': 'Loyang, Changi'},
-                18: {'name': 'District 18', 'type': 'district', 'value': 'Tampines, Pasir Ris'},
-                19: {'name': 'District 19', 'type': 'district', 'value': 'Serangoon Garden, Hougang, Punggol'},
-                20: {'name': 'District 20', 'type': 'district', 'value': 'Bishan, Ang Mo Kio'},
-                21: {'name': 'District 21', 'type': 'district', 'value': 'Upper Bukit Timah, Clementi Park, Ulu Pandan'},
-                22: {'name': 'District 22', 'type': 'district', 'value': 'Jurong'},
-                23: {'name': 'District 23', 'type': 'district', 'value': 'Hillview, Dairy Farm, Bukit Panjang, Choa Chu Kang'},
-                24: {'name': 'District 24', 'type': 'district', 'value': 'Lim Chu Kang, Tengah'},
-                25: {'name': 'District 25', 'type': 'district', 'value': 'Kranji, Woodgrove'},
-                26: {'name': 'District 26', 'type': 'district', 'value': 'Upper Thomson, Springleaf'},
-                27: {'name': 'District 27', 'type': 'district', 'value': 'Yishun, Sembawang'},
-                28: {'name': 'District 28', 'type': 'district', 'value': 'Seletar'}
-            }
-            
-            if region_id in region_map:
-                region_data = region_map[region_id]
-                new_region = AgentRegion(
-                    agent_id=current_user['user_id'],
-                    region_name=region_data['name'],
-                    region_type=region_data['type'],
-                    region_value=region_data['value']
-                )
-                db.session.add(new_region)
+        # Convert to integers to ensure type consistency
+        selected_regions = [int(r) for r in selected_regions]
+        
+        # Fetch selected regions from database
+        regions = Region.query.filter(Region.id.in_(selected_regions)).all()
+        
+        # Debug logging
+        print(f"DEBUG: Selected region IDs: {selected_regions}")
+        print(f"DEBUG: Found regions: {[(r.id, r.district, r.location, r.is_active) for r in regions]}")
+        
+        # Check if all regions exist
+        if len(regions) != len(selected_regions):
+            # Get the IDs that were not found
+            found_ids = [r.id for r in regions]
+            missing_ids = [r for r in selected_regions if r not in found_ids]
+            print(f"DEBUG: Missing region IDs: {missing_ids}")
+            return jsonify({
+                'error': f'Invalid region IDs: {missing_ids}. Expected {len(selected_regions)} regions but found {len(regions)}'
+            }), 400
+        
+        if not regions:
+            return jsonify({'error': 'No valid regions found'}), 400
+        
+        # Check for inactive regions
+        inactive_regions = [r for r in regions if not r.is_active]
+        if inactive_regions:
+            return jsonify({
+                'error': f'One or more selected regions are inactive: {[r.location for r in inactive_regions]}'
+            }), 400
+        
+        # All regions are valid and active - add them
+        for region in regions:
+            new_region = AgentRegion(
+                agent_id=current_user['user_id'],
+                region_name=f'District {region.district}',
+                region_type='district',
+                region_value=region.location
+            )
+            db.session.add(new_region)
         
         db.session.commit()
         
@@ -3478,8 +3492,10 @@ def update_agent_regions():
         
     except Exception as e:
         print(f"Error updating agent regions: {e}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
-        return jsonify({'error': 'Failed to update regions'}), 500
+        return jsonify({'error': f'Failed to update regions: {str(e)}'}), 500
 
 @app.route('/api/agent/recent-activity', methods=['GET'])
 @require_auth
@@ -6064,6 +6080,65 @@ def get_verified_reviews():
 
 # ==================== DATABASE SEEDING ====================
 
+def seed_regions():
+    """Seed the database with Singapore postal districts"""
+    
+    try:
+        # Check if regions already exist
+        if Region.query.count() > 0:
+            print("Regions already exist, skipping seeding")
+            return
+        
+        print("Seeding regions...")
+        
+        # Regions data
+        regions_data = [
+            ('01', '01, 02, 03, 04, 05, 06', 'Raffles Place, Cecil, Marina, People\'s Park'),
+            ('02', '07, 08', 'Anson, Tanjong Pagar'),
+            ('03', '14, 15, 16', 'Queenstown, Tiong Bahru'),
+            ('04', '09, 10', 'Telok Blangah, Harbourfront'),
+            ('05', '11, 12, 13', 'Pasir Panjang, Hong Leong Garden, Clementi New Town'),
+            ('06', '17', 'High Street, Beach Road (part)'),
+            ('07', '18, 19', 'Middle Road, Golden Mile'),
+            ('08', '20, 21', 'Little India'),
+            ('09', '22, 23', 'Orchard, Cairnhill, River Valley'),
+            ('10', '24, 25, 26, 27', 'Ardmore, Bukit Timah, Holland Road, Tanglin'),
+            ('11', '28, 29, 30', 'Watten Estate, Novena, Thomson'),
+            ('12', '31, 32, 33', 'Balestier, Toa Payoh, Serangoon'),
+            ('13', '34, 35, 36, 37', 'Macpherson, Braddell'),
+            ('14', '38, 39, 40, 41', 'Geylang, Eunos'),
+            ('15', '42, 43, 44, 45', 'Katong, Joo Chiat, Amber Road'),
+            ('16', '46, 47, 48', 'Bedok, Upper East Coast, Eastwood, Kew Drive'),
+            ('17', '49, 50, 81', 'Loyang, Changi'),
+            ('18', '51, 52', 'Tampines, Pasir Ris'),
+            ('19', '53, 54, 55, 82', 'Serangoon Garden, Hougang, Punggol'),
+            ('20', '56, 57', 'Bishan, Ang Mo Kio'),
+            ('21', '58, 59', 'Upper Bukit Timah, Clementi Park, Ulu Pandan'),
+            ('22', '60, 61, 62, 63, 64', 'Jurong'),
+            ('23', '65, 66, 67, 68', 'Hillview, Dairy Farm, Bukit Panjang, Choa Chu Kang'),
+            ('24', '69, 70, 71', 'Lim Chu Kang, Tengah'),
+            ('25', '72, 73', 'Kranji, Woodgrove'),
+            ('26', '77, 78', 'Upper Thomson, Springleaf'),
+            ('27', '75, 76', 'Yishun, Sembawang'),
+            ('28', '79, 80', 'Seletar'),
+        ]
+        
+        # Insert regions
+        for district, sector, location in regions_data:
+            region = Region(
+                district=district,
+                sector=sector,
+                location=location,
+                is_active=True
+            )
+            db.session.add(region)
+        
+        db.session.commit()
+        print(f"✅ Successfully seeded {Region.query.count()} regions!")
+        
+    except Exception as e:
+        print(f"❌ Error seeding regions: {e}")
+
 def seed_subscription_plans():
     """Seed the database with initial subscription plans and important features"""
     
@@ -6715,8 +6790,191 @@ def get_user_predictions(user_id):
         print(f"Error in get_user_predictions endpoint: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+# ===================== Admin Regions Management Endpoints =====================
+
+@app.route('/api/admin/regions', methods=['GET'])
+@require_auth
+def get_all_regions():
+    """Get all regions - accessible to both admin and agents"""
+    try:
+        current_user = request.user
+        
+        # Get all regions
+        regions = Region.query.order_by(Region.district).all()
+        
+        regions_data = []
+        for region in regions:
+            regions_data.append({
+                'id': region.id,
+                'district': region.district,
+                'sector': region.sector,
+                'location': region.location,
+                'is_active': region.is_active,
+                'created_at': region.created_at.isoformat() if region.created_at else None,
+                'updated_at': region.updated_at.isoformat() if region.updated_at else None
+            })
+        
+        return jsonify({'regions': regions_data}), 200
+        
+    except Exception as e:
+        print(f"Error getting regions: {e}")
+        return jsonify({'error': 'Failed to get regions'}), 500
+
+@app.route('/api/admin/regions/<int:region_id>', methods=['GET'])
+@require_auth
+def get_region(region_id):
+    """Get a specific region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        region = Region.query.get(region_id)
+        if not region:
+            return jsonify({'error': 'Region not found'}), 404
+        
+        return jsonify({
+            'id': region.id,
+            'district': region.district,
+            'sector': region.sector,
+            'location': region.location,
+            'is_active': region.is_active
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting region: {e}")
+        return jsonify({'error': 'Failed to get region'}), 500
+
+@app.route('/api/admin/regions', methods=['POST'])
+@require_auth
+def create_region():
+    """Create a new region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        data = request.get_json()
+        district = data.get('district')
+        sector = data.get('sector')
+        location = data.get('location')
+        
+        if not district or not sector or not location:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Create new region
+        new_region = Region(
+            district=district,
+            sector=sector,
+            location=location,
+            is_active=True
+        )
+        db.session.add(new_region)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Region created successfully',
+            'region': {
+                'id': new_region.id,
+                'district': new_region.district,
+                'sector': new_region.sector,
+                'location': new_region.location,
+                'is_active': new_region.is_active
+            }
+        }), 201
+        
+    except Exception as e:
+        print(f"Error creating region: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create region'}), 500
+
+@app.route('/api/admin/regions/<int:region_id>', methods=['PUT'])
+@require_auth
+def update_region(region_id):
+    """Update a region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        region = Region.query.get(region_id)
+        if not region:
+            return jsonify({'error': 'Region not found'}), 404
+        
+        data = request.get_json()
+        
+        if 'district' in data:
+            region.district = data['district']
+        if 'sector' in data:
+            region.sector = data['sector']
+        if 'location' in data:
+            region.location = data['location']
+        if 'is_active' in data:
+            region.is_active = data['is_active']
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Region updated successfully',
+            'region': {
+                'id': region.id,
+                'district': region.district,
+                'sector': region.sector,
+                'location': region.location,
+                'is_active': region.is_active
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating region: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update region'}), 500
+
+@app.route('/api/admin/regions/<int:region_id>', methods=['DELETE'])
+@require_auth
+def delete_region(region_id):
+    """Delete a region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        region = Region.query.get(region_id)
+        if not region:
+            return jsonify({'error': 'Region not found'}), 404
+        
+        # Check if any agents are assigned to this region
+        region_value = f"District {region.district}"
+        agent_regions_count = AgentRegion.query.filter_by(region_value=region.location).count()
+        
+        if agent_regions_count > 0:
+            return jsonify({'error': f'Cannot delete region. {agent_regions_count} agent(s) assigned to this region.'}), 400
+        
+        db.session.delete(region)
+        db.session.commit()
+        
+        return jsonify({'message': 'Region deleted successfully'}), 200
+        
+    except Exception as e:
+        print(f"Error deleting region: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete region'}), 500
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Create tables if they don't exist
+        seed_regions()  # Seed regions data
         seed_subscription_plans()  # Seed initial data
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)

@@ -1,0 +1,217 @@
+.regions-content {
+  margin-top: 2rem;
+}
+
+.regions-description {
+  color: #0066cc;
+  font-size: 1rem;
+  margin-top: 0.5rem;
+}
+
+.regions-table-container {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.regions-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.regions-table thead {
+  background-color: #f5f5f5;
+}
+
+.regions-table th,
+.regions-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.regions-table th {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.regions-table tbody tr:hover {
+  background-color: #f9f9f9;
+}
+
+.regions-empty {
+  text-align: center;
+  color: #999;
+  padding: 2rem;
+}
+
+.regions-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.regions-add-btn,
+.regions-save-btn,
+.regions-confirm-delete-btn {
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: background-color 0.3s;
+}
+
+.regions-add-btn:hover,
+.regions-save-btn:hover,
+.regions-confirm-delete-btn:hover {
+  background-color: #0052a3;
+}
+
+.regions-edit-btn,
+.regions-delete-btn {
+  background: none;
+  border: none;
+  color: #0066cc;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.25rem 0.5rem;
+  transition: color 0.3s;
+}
+
+.regions-edit-btn:hover,
+.regions-delete-btn:hover {
+  color: #0052a3;
+  text-decoration: underline;
+}
+
+.regions-delete-btn {
+  color: #dc3545;
+}
+
+.regions-delete-btn:hover {
+  color: #c82333;
+}
+
+.regions-divider {
+  color: #ccc;
+  margin: 0 0.5rem;
+}
+
+.regions-cancel-btn {
+  background-color: #e0e0e0;
+  color: #333;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  margin-left: 1rem;
+  transition: background-color 0.3s;
+}
+
+.regions-cancel-btn:hover {
+  background-color: #d0d0d0;
+}
+
+.regions-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.regions-modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.regions-modal-content h2 {
+  margin: 0 0 1.5rem 0;
+  color: #333;
+}
+
+.regions-modal-content p {
+  margin-bottom: 1.5rem;
+  color: #666;
+}
+
+.regions-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.regions-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.regions-form-group label {
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.regions-form-group input {
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.regions-form-group input:focus {
+  outline: none;
+  border-color: #0066cc;
+}
+
+.regions-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.regions-error {
+  background-color: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.regions-error button {
+  background-color: #c33;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.regions-loading {
+  text-align: center;
+  padding: 4rem;
+  color: #666;
+}
+

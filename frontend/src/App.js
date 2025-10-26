@@ -38,6 +38,7 @@ import FeedbackManagement from './components/system/FeedbackManagement';
 import RespondToFeedback from './components/system/RespondToFeedback';
 import ViewFeedback from './components/system/ViewFeedback';
 import ContentManagement from './components/system/ContentManagement';
+import RegionsManagement from './components/system/RegionsManagement';
 import EditHeroSection from './components/system/EditHeroSection';
 import EditHowItWorks from './components/system/EditHowItWorks';
 import EditSeeHowItWorks from './components/system/EditSeeHowItWorks';
@@ -101,6 +102,7 @@ function App() {
         <Route path="/dashboard/respond-to-feedback/:feedbackId" element={<RespondToFeedback />} />
         <Route path="/dashboard/view-feedback/:feedbackId" element={<ViewFeedback />} />
         <Route path="/dashboard/content-management" element={<ContentManagement />} />
+        <Route path="/dashboard/regions-management" element={<RegionsManagement />} />
         <Route path="/dashboard/edit-hero-section" element={<EditHeroSection />} />
         <Route path="/dashboard/edit-how-it-works" element={<EditHowItWorks />} />
         <Route path="/dashboard/edit-see-how-it-works" element={<EditSeeHowItWorks />} />
