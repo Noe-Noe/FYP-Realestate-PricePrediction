@@ -5,7 +5,7 @@ import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import PropertyCard from './PropertyCard';
-import { bookmarksAPI } from '../../services/api';
+import { bookmarksAPI, predictionAPI } from '../../services/api';
 import './comparison.css';
 
 const GOOGLE_MAPS_LIBRARIES = ['places', 'geometry'];
@@ -68,6 +68,12 @@ const Comparison = () => {
   const [isComparisonBookmarked, setIsComparisonBookmarked] = useState(false);
   const [isPropertyBookmarked, setIsPropertyBookmarked] = useState(false);
   
+  // ML prediction data for both properties
+  const [property1MlData, setProperty1MlData] = useState(null);
+  const [property2MlData, setProperty2MlData] = useState(null);
+  const [isLoadingMlPredictions, setIsLoadingMlPredictions] = useState(false);
+  const [mlPredictionError, setMlPredictionError] = useState('');
+  
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -96,6 +102,73 @@ const Comparison = () => {
       unit: 'A1'
     }
   ];
+
+  // Generate ML predictions for both properties
+  useEffect(() => {
+    const generateMlPredictions = async () => {
+      if (!properties[0] || !properties[1]) return;
+
+      setIsLoadingMlPredictions(true);
+      setMlPredictionError('');
+
+      try {
+        // Check if user is authenticated
+        const token = localStorage.getItem('accessToken');
+        const useTestEndpoint = !token;
+
+        // Generate predictions for both properties in parallel
+        const [property1Response, property2Response] = await Promise.allSettled([
+          // Property 1 prediction
+          (useTestEndpoint ? predictionAPI.predictPriceTest : predictionAPI.predictPrice)({
+            propertyType: properties[0].propertyType,
+            address: properties[0].address,
+            floorArea: properties[0].floorArea,
+            level: properties[0].level || 'Ground Floor',
+            unit: properties[0].unit || 'N/A'
+          }),
+          // Property 2 prediction
+          (useTestEndpoint ? predictionAPI.predictPriceTest : predictionAPI.predictPrice)({
+            propertyType: properties[1].propertyType,
+            address: properties[1].address,
+            floorArea: properties[1].floorArea,
+            level: properties[1].level || 'Ground Floor',
+            unit: properties[1].unit || 'N/A'
+          })
+        ]);
+
+        // Handle Property 1 response
+        if (property1Response.status === 'fulfilled' && property1Response.value.success) {
+          setProperty1MlData({
+            property_data: property1Response.value.property_data,
+            comparison_data: property1Response.value.comparison_data,
+            matched_address: property1Response.value.matched_address
+          });
+        }
+
+        // Handle Property 2 response
+        if (property2Response.status === 'fulfilled' && property2Response.value.success) {
+          setProperty2MlData({
+            property_data: property2Response.value.property_data,
+            comparison_data: property2Response.value.comparison_data,
+            matched_address: property2Response.value.matched_address
+          });
+        }
+
+        // Check for errors
+        if (property1Response.status === 'rejected' || property2Response.status === 'rejected') {
+          setMlPredictionError('Some predictions failed to generate');
+        }
+
+      } catch (error) {
+        console.error('ML prediction error:', error);
+        setMlPredictionError('AI predictions temporarily unavailable');
+      } finally {
+        setIsLoadingMlPredictions(false);
+      }
+    };
+
+    generateMlPredictions();
+  }, [properties]);
 
   // Mock detailed comparison data
   const comparisonData = {
@@ -544,6 +617,8 @@ const Comparison = () => {
                activeMapTab={activeMapTab}
                onMapTabChange={handleMapTabChange}
                mapId="property1-map"
+               // ML prediction data
+               mlPredictionData={property1MlData}
                // Amenities props for Property 1
                amenities={property1Amenities}
                selectedAmenityTypes={property1SelectedTypes}
@@ -563,6 +638,8 @@ const Comparison = () => {
                activeMapTab={activeMapTab}
                onMapTabChange={handleMapTabChange}
                mapId="property2-map"
+               // ML prediction data
+               mlPredictionData={property2MlData}
                // Amenities props for Property 2
                amenities={property2Amenities}
                selectedAmenityTypes={property2SelectedTypes}

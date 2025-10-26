@@ -5,7 +5,7 @@ import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import PropertyCard from './PropertyCard';
-import { bookmarksAPI } from '../../services/api';
+import { bookmarksAPI, predictionAPI } from '../../services/api';
 import './prediction.css';
 
 const GOOGLE_MAPS_LIBRARIES = ['places', 'geometry'];
@@ -61,6 +61,9 @@ const Prediction = () => {
   const [amenitiesError, setAmenitiesError] = useState('');
   const [isAddressBookmarked, setIsAddressBookmarked] = useState(false);
   const [isPredictionBookmarked, setIsPredictionBookmarked] = useState(false);
+  const [mlPredictionData, setMlPredictionData] = useState(null);
+  const [isLoadingMlPrediction, setIsLoadingMlPrediction] = useState(false);
+  const [mlPredictionError, setMlPredictionError] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -77,6 +80,61 @@ const Prediction = () => {
 
   // Check if the address was originally a postal code
   const isPostalCodeSearch = /^\d{6}$/.test(searchData.address.split(',')[0].trim());
+
+  // Call ML prediction API when component loads
+  useEffect(() => {
+    const generateMlPrediction = async () => {
+      if (!searchData.address || !searchData.propertyType || !searchData.floorArea) {
+        return;
+      }
+
+      setIsLoadingMlPrediction(true);
+      setMlPredictionError('');
+
+      try {
+        // Prepare property data for ML prediction
+        const propertyData = {
+          propertyType: searchData.propertyType,
+          address: searchData.address,
+          floorArea: searchData.floorArea,
+          level: searchData.level || 'Ground Floor',
+          unit: searchData.unit || 'N/A'
+        };
+
+        // Check if user is authenticated
+        const token = localStorage.getItem('accessToken');
+        const useTestEndpoint = !token;
+
+        // Call the appropriate ML prediction API
+        const response = useTestEndpoint 
+          ? await predictionAPI.predictPriceTest(propertyData)
+          : await predictionAPI.predictPrice(propertyData);
+
+        if (response.success) {
+          setMlPredictionData({
+            property_data: response.property_data,
+            comparison_data: response.comparison_data,
+            matched_address: response.matched_address
+          });
+        } else {
+          setMlPredictionError('Failed to generate ML prediction');
+        }
+      } catch (error) {
+        console.error('ML prediction error:', error);
+        if (error.message.includes('Invalid token') || error.message.includes('Token expired')) {
+          setMlPredictionError('Please log in to get AI-powered predictions');
+        } else if (error.message.includes('Authorization token required')) {
+          setMlPredictionError('Please log in to get AI-powered predictions');
+        } else {
+          setMlPredictionError('AI prediction temporarily unavailable: ' + (error.message || 'Unknown error'));
+        }
+      } finally {
+        setIsLoadingMlPrediction(false);
+      }
+    };
+
+    generateMlPrediction();
+  }, [searchData.address, searchData.propertyType, searchData.floorArea]);
 
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
@@ -579,6 +637,8 @@ const Prediction = () => {
             activeMapTab={activeMapTab}
             onMapTabChange={handleMapTabChange}
             mapId="prediction-map"
+            // ML prediction data
+            mlPredictionData={mlPredictionData}
             // Amenities props
             amenities={amenities}
             selectedAmenityTypes={selectedAmenityTypes}
