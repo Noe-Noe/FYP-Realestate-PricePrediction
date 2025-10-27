@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../context/ApiContext';
-import { authAPI, subscriptionPlansAPI, importantFeaturesAPI, onboardingAPI } from '../services/api';
+import { authAPI, subscriptionPlansAPI, importantFeaturesAPI, onboardingAPI, legalAPI } from '../services/api';
 import './SignUp.css';
 
 const SignUp = () => {
@@ -28,11 +28,14 @@ const SignUp = () => {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [subscriptionPlans, setSubscriptionPlans] = useState([]);
   const [importantFeatures, setImportantFeatures] = useState([]);
+  const [legalTerms, setLegalTerms] = useState('');
+  const [privacyPolicy, setPrivacyPolicy] = useState('');
 
-  // Fetch subscription plans and important features on component mount
+  // Fetch subscription plans, important features, and legal content on component mount
   useEffect(() => {
     fetchSubscriptionPlans();
     fetchImportantFeatures();
+    fetchLegalContent();
   }, []);
 
   // Update plan prices when yearly billing toggle changes
@@ -112,6 +115,46 @@ const SignUp = () => {
         '99.9% uptime SLA',
         'GDPR compliant'
       ]);
+    }
+  };
+
+  const fetchLegalContent = async () => {
+    try {
+      console.log('Fetching legal content from API...');
+      
+      // Fetch Terms of Use
+      try {
+        const termsResponse = await legalAPI.getContent('terms_of_use');
+        console.log('Terms of Use API response:', termsResponse);
+        
+        if (termsResponse.success && termsResponse.data) {
+          setLegalTerms(termsResponse.data.content || '');
+        } else {
+          console.log('No Terms of Use found, using default');
+          setLegalTerms('By accessing and using this real estate price prediction platform, you agree to be bound by these Terms of Service. You acknowledge that the property price predictions provided are estimates based on historical data and market trends, and should not be considered as definitive valuations or guarantees of actual property values. You agree to use the platform solely for informational purposes and understand that we are not responsible for any decisions made based on the predictions provided. You will not attempt to manipulate or abuse the system, and you will comply with all applicable laws and regulations when using our services. We reserve the right to modify these terms at any time, and your continued use of the platform constitutes acceptance of any changes.');
+        }
+      } catch (error) {
+        console.error('Error fetching Terms of Use:', error);
+        setLegalTerms('By accessing and using this real estate price prediction platform, you agree to be bound by these Terms of Service. You acknowledge that the property price predictions provided are estimates based on historical data and market trends, and should not be considered as definitive valuations or guarantees of actual property values. You agree to use the platform solely for informational purposes and understand that we are not responsible for any decisions made based on the predictions provided. You will not attempt to manipulate or abuse the system, and you will comply with all applicable laws and regulations when using our services. We reserve the right to modify these terms at any time, and your continued use of the platform constitutes acceptance of any changes.');
+      }
+      
+      // Fetch Privacy Policy
+      try {
+        const privacyResponse = await legalAPI.getContent('privacy_policy');
+        console.log('Privacy Policy API response:', privacyResponse);
+        
+        if (privacyResponse.success && privacyResponse.data) {
+          setPrivacyPolicy(privacyResponse.data.content || '');
+        } else {
+          console.log('No Privacy Policy found, using default');
+          setPrivacyPolicy('We are committed to protecting your personal information and privacy. When you register for an account, we collect information including your name, email address, password, and optionally your phone number for account verification and communication purposes. For agent accounts, we also collect professional details such as your CEA license number, company information, and business contact details. We use this information to provide and improve our services, send important notifications about your account, and personalize your experience on our platform. We implement industry-standard security measures to protect your data from unauthorized access, alteration, or disclosure. We will never sell your personal information to third parties. However, we may share anonymized usage data for analytics purposes. You have the right to access, update, or delete your personal information at any time by contacting us or using your account settings. By using our platform, you consent to the collection and use of your information as described in this policy.');
+        }
+      } catch (error) {
+        console.error('Error fetching Privacy Policy:', error);
+        setPrivacyPolicy('We are committed to protecting your personal information and privacy. When you register for an account, we collect information including your name, email address, password, and optionally your phone number for account verification and communication purposes. For agent accounts, we also collect professional details such as your CEA license number, company information, and business contact details. We use this information to provide and improve our services, send important notifications about your account, and personalize your experience on our platform. We implement industry-standard security measures to protect your data from unauthorized access, alteration, or disclosure. We will never sell your personal information to third parties. However, we may share anonymized usage data for analytics purposes. You have the right to access, update, or delete your personal information at any time by contacting us or using your account settings. By using our platform, you consent to the collection and use of your information as described in this policy.');
+      }
+    } catch (error) {
+      console.error('Error fetching legal content:', error);
     }
   };
 
@@ -681,10 +724,36 @@ const SignUp = () => {
       <div className="terms-content">
         <div className="terms-text">
           <h3>Terms of Service</h3>
-          <p>By accepting these terms, you agree to our service conditions, privacy policy, and data handling practices. You acknowledge that you have read and understood all terms before proceeding.</p>
+          <div className="terms-content-text">
+            {(legalTerms || 'Loading terms of service...').split('\n').map((line, index) => {
+              if (line.trim().startsWith('•')) {
+                return (
+                  <ul key={index} className="terms-list">
+                    <li>{line.trim().substring(1).trim()}</li>
+                  </ul>
+                );
+              } else if (line.trim()) {
+                return <p key={index} className="terms-paragraph">{line}</p>;
+              }
+              return null;
+            })}
+          </div>
           
-          <h3>Privacy Policy</h3>
-          <p>We collect and process your personal information in accordance with our privacy policy. Your data is protected and will not be shared with third parties without your consent.</p>
+          <h3 className="terms-subheading">Privacy Policy</h3>
+          <div className="terms-content-text">
+            {(privacyPolicy || 'Loading privacy policy...').split('\n').map((line, index) => {
+              if (line.trim().startsWith('•')) {
+                return (
+                  <ul key={index} className="terms-list">
+                    <li>{line.trim().substring(1).trim()}</li>
+                  </ul>
+                );
+              } else if (line.trim()) {
+                return <p key={index} className="terms-paragraph">{line}</p>;
+              }
+              return null;
+            })}
+          </div>
         </div>
       </div>
 

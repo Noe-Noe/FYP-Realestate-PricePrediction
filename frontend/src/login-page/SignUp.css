@@ -728,7 +728,7 @@
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
-  max-height: 200px;
+  max-height: 400px;
   overflow-y: auto;
 }
 
@@ -739,11 +739,56 @@
   margin: 0 0 0.75rem 0;
 }
 
+.terms-text h3:first-child {
+  margin-top: 0;
+}
+
+.terms-subheading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 2rem 0 0.75rem 0;
+}
+
+.terms-content-text {
+  margin-bottom: 1rem;
+}
+
 .terms-text p {
   color: #6b7280;
   line-height: 1.6;
   margin: 0 0 1rem 0;
   font-size: 0.875rem;
+}
+
+.terms-paragraph {
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+}
+
+.terms-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 1rem 0;
+}
+
+.terms-list li {
+  position: relative;
+  padding: 0.25rem 0 0.25rem 1.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.terms-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: #14b8a6;
+  font-weight: bold;
+  font-size: 1.2rem;
 }
 
 .checkbox-group {
