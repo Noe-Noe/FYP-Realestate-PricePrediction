@@ -94,6 +94,18 @@ const HowItWorks = () => {
     ];
   };
 
+  // Default fallback images for different property types
+  const getDefaultImage = (propertyType) => {
+    const images = {
+      'Commercial': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&h=600&fit=crop',
+      'Industrial': 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&h=600&fit=crop',
+      'Apartment': 'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=800&h=600&fit=crop',
+      'Condo': 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop',
+      'HDB': 'https://images.unsplash.com/photo-1551884171-b580fbadd0cd?w=800&h=600&fit=crop'
+    };
+    return images[propertyType] || images['Commercial'];
+  };
+
 
   return (
     <section className="explore">
@@ -118,7 +130,17 @@ const HowItWorks = () => {
         ) : (
           cards.map(card => (
           <article className="how-card" key={card.id}>
-            <div className="how-card-image" style={{ backgroundImage: `url('${card.image}')` }} />
+            <div 
+              className="how-card-image" 
+              style={{ 
+                backgroundImage: `url('${card.image || getDefaultImage(card.type)}')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center'
+              }}
+              onError={(e) => {
+                e.target.style.backgroundImage = `url('${getDefaultImage(card.type)}')`;
+              }}
+            />
             <div className="how-card-body">
               <h3>{card.title}</h3>
               <p className="muted">{card.address}</p>

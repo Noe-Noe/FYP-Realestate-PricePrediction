@@ -100,7 +100,7 @@ export FLASK_ENV=development
 flask run
 ```
 
-Server runs at http://localhost:5000.
+Server runs at http://localhost:5001.
 
 8) Common issues on macOS
 

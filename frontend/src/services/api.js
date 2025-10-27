@@ -571,8 +571,48 @@ export const featuresAPI = {
   },
 
   // Update features section title
-  updateSectionTitle: async (sectionTitle) => {
-    return apiCall('/features/section-title', 'PUT', { section_title: sectionTitle });
+  updateSectionTitle: async (sectionTitle, tutorialVideoUrl = null) => {
+    return apiCall('/features/section-title', 'PUT', { 
+      section_title: sectionTitle,
+      tutorial_video_url: tutorialVideoUrl 
+    });
+  },
+
+  // Upload features step tutorial video
+  uploadVideo: async (file) => {
+    const url = `${API_BASE_URL}/features/upload-video`;
+    const token = localStorage.getItem('accessToken');
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const options = {
+      method: 'POST',
+      body: formData,
+      headers: {
+        // Don't set Content-Type for FormData, let the browser set it with boundary
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    };
+
+    try {
+      const response = await fetch(url, options);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('API call failed:', error);
+      throw error;
+    }
+  },
+
+  // Update tutorial video URL for the section
+  updateTutorialVideo: async (videoUrl) => {
+    return apiCall('/features/tutorial-video', 'PUT', { tutorial_video_url: videoUrl });
   },
 };
 

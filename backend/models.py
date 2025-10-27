@@ -252,6 +252,28 @@ class Bookmark(db.Model):
     # Relationships
     user = db.relationship('User', backref='bookmarks')
 
+class FeaturesSection(db.Model):
+    __tablename__ = 'features_section'
+    
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    section_title = db.Column(db.String(255), nullable=False, default='How it Works')
+    tutorial_video_url = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class FeaturesStep(db.Model):
+    __tablename__ = 'features_steps'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    step_number = db.Column(db.Integer, nullable=False)
+    step_title = db.Column(db.String(255), nullable=False)
+    step_description = db.Column(db.Text, nullable=False)
+    step_image = db.Column(db.String(500))
+    step_video = db.Column(db.String(500))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class TeamSection(db.Model):
     __tablename__ = 'team_section'
     

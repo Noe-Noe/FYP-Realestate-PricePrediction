@@ -347,3 +347,141 @@
 .edit-how-it-works-save-btn:hover {
   background-color: #2563eb;
 }
+
+/* Tutorial Video Section */
+.edit-how-it-works-tutorial-video-section {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.edit-how-it-works-tutorial-video-heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
+}
+
+.edit-how-it-works-tutorial-video-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0 0 1.5rem 0;
+}
+
+.edit-how-it-works-tutorial-video-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.edit-how-it-works-tutorial-video-form-group {
+  margin-bottom: 1rem;
+}
+
+.edit-how-it-works-tutorial-video-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.edit-how-it-works-tutorial-video-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #1f2937;
+  background-color: white;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.edit-how-it-works-tutorial-video-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.edit-how-it-works-tutorial-video-upload-section {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.edit-how-it-works-tutorial-video-file-input {
+  display: none;
+}
+
+.edit-how-it-works-tutorial-video-upload-btn {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background-color: #e2e8f0;
+  color: #475569;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-how-it-works-tutorial-video-upload-btn:hover {
+  background-color: #cbd5e1;
+  color: #334155;
+}
+
+.edit-how-it-works-tutorial-video-upload-action-btn {
+  padding: 0.75rem 1.5rem;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-how-it-works-tutorial-video-upload-action-btn:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.edit-how-it-works-tutorial-video-upload-action-btn:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.edit-how-it-works-tutorial-video-preview {
+  margin-top: 1rem;
+}
+
+.edit-how-it-works-tutorial-video-preview-container {
+  padding: 1rem;
+  background-color: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.edit-how-it-works-tutorial-video-preview-video {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .edit-how-it-works-tutorial-video-upload-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .edit-how-it-works-tutorial-video-upload-btn,
+  .edit-how-it-works-tutorial-video-upload-action-btn {
+    width: 100%;
+    text-align: center;
+  }
+}

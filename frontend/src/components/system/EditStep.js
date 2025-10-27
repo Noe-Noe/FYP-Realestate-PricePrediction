@@ -4,7 +4,7 @@ import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import './EditStep.css';
-import api from '../../services/api';
+import api, { BACKEND_ORIGIN } from '../../services/api';
 
 const EditStep = () => {
   const { stepId } = useParams();
@@ -14,7 +14,10 @@ const EditStep = () => {
     title: '',
     description: '',
     image: null,
-    imagePreview: null
+    imagePreview: null,
+    video: null,
+    videoUrl: null,
+    videoPreview: null
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,12 +30,18 @@ const EditStep = () => {
         const response = await api.features.getStep(stepId);
         if (response.success) {
           const step = response.step;
+          // Prefix video URL with backend URL if it's a relative path
+          const videoPreview = step.step_video && step.step_video.startsWith('/') && !step.step_video.startsWith('//')
+            ? `${BACKEND_ORIGIN}${step.step_video}` : step.step_video;
           setFormData({
             stepNumber: step.step_number.toString(),
             title: step.step_title,
             description: step.step_description,
             image: null,
-            imagePreview: step.step_image
+            imagePreview: step.step_image,
+            video: null,
+            videoUrl: step.step_video,
+            videoPreview: videoPreview
           });
         }
       } catch (error) {
@@ -83,6 +92,64 @@ const EditStep = () => {
     }));
   };
 
+  const handleVideoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData(prev => ({
+        ...prev,
+        video: file
+      }));
+
+      // Create preview URL
+      const videoUrl = URL.createObjectURL(file);
+      setFormData(prev => ({
+        ...prev,
+        videoPreview: videoUrl
+      }));
+    }
+  };
+
+  const handleVideoUrlChange = (e) => {
+    const url = e.target.value;
+    // Prefix with backend URL if it's a relative path
+    const previewUrl = url && url.startsWith('/') && !url.startsWith('//')
+      ? `${BACKEND_ORIGIN}${url}` : url;
+    setFormData(prev => ({
+      ...prev,
+      videoUrl: url,
+      videoPreview: previewUrl
+    }));
+  };
+
+  const handleUploadVideo = async () => {
+    if (!formData.video) {
+      alert('Please select a video file to upload');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const response = await api.features.uploadVideo(formData.video);
+      if (response.success) {
+        // Prefix with backend URL if it's a relative path
+        const fullVideoUrl = response.file_url.startsWith('/') && !response.file_url.startsWith('//')
+          ? `${BACKEND_ORIGIN}${response.file_url}` : response.file_url;
+        setFormData(prev => ({
+          ...prev,
+          videoUrl: response.file_url,
+          videoPreview: fullVideoUrl
+        }));
+        setMessage('Video uploaded successfully!');
+        setTimeout(() => setMessage(''), 2000);
+      }
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      setMessage(`Error uploading video: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveStep = async () => {
     try {
       setSaving(true);
@@ -91,7 +158,8 @@ const EditStep = () => {
       const stepData = {
         step_title: formData.title,
         step_description: formData.description,
-        step_image: formData.imagePreview
+        step_image: formData.imagePreview,
+        step_video: formData.videoUrl || formData.videoPreview
       };
 
       const response = await api.features.updateStep(stepId, stepData);
@@ -255,6 +323,68 @@ const EditStep = () => {
                       <div className="edit-step-preview-fallback" style={{ display: 'none' }}>
                         <span className="edit-step-emoji-preview">{formData.imagePreview}</span>
                       </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="edit-step-form-group">
+              <label className="edit-step-form-label">Step Video</label>
+              <div className="edit-step-image-options">
+                {/* Video URL Input */}
+                <div className="edit-step-form-group">
+                  <label htmlFor="videoUrl" className="edit-step-form-label">Video URL</label>
+                  <input
+                    type="text"
+                    id="videoUrl"
+                    name="videoUrl"
+                    value={formData.videoUrl || ''}
+                    onChange={handleVideoUrlChange}
+                    className="edit-step-form-input"
+                    placeholder="Enter video URL (https://...)"
+                  />
+                </div>
+
+                {/* File Upload */}
+                <div className="edit-step-form-group">
+                  <label htmlFor="video" className="edit-step-form-label">Or Upload Video File</label>
+                  <div className="edit-step-image-upload-section">
+                    <input
+                      type="file"
+                      id="video"
+                      name="video"
+                      onChange={handleVideoUpload}
+                      className="edit-step-file-input"
+                      accept="video/*"
+                    />
+                    <label htmlFor="video" className="edit-step-upload-btn">
+                      Choose Video File
+                    </label>
+                    {formData.video && (
+                      <button
+                        type="button"
+                        onClick={handleUploadVideo}
+                        className="edit-step-upload-action-btn"
+                        disabled={saving}
+                      >
+                        {saving ? 'Uploading...' : 'Upload Video'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Video Preview */}
+                {formData.videoPreview && (
+                  <div className="edit-step-image-preview">
+                    <label className="edit-step-form-label">Preview</label>
+                    <div className="edit-step-preview-container">
+                      <video
+                        src={formData.videoPreview}
+                        controls
+                        className="edit-step-preview-video"
+                        style={{ maxWidth: '100%', maxHeight: '300px' }}
+                      />
                     </div>
                   </div>
                 )}

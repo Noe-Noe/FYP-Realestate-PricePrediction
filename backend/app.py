@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask_mail import Mail, Message
-from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, Region, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature
+from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, Region, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature, FeaturesSection, FeaturesStep
 from sqlalchemy import text
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -4965,8 +4965,12 @@ def upload_hero_background():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"hero_bg_{timestamp}_{file.filename}"
         
+        # Ensure directory exists
+        upload_dir = os.path.join('admin', 'hero', 'backgrounds')
+        os.makedirs(upload_dir, exist_ok=True)
+        
         # Save file
-        file_path = os.path.join('admin', 'hero', 'backgrounds', filename)
+        file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         
         # Return the URL path
@@ -5003,8 +5007,12 @@ def upload_hero_video():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"hero_video_{timestamp}_{file.filename}"
         
+        # Ensure directory exists
+        upload_dir = os.path.join('admin', 'hero', 'videos')
+        os.makedirs(upload_dir, exist_ok=True)
+        
         # Save file
-        file_path = os.path.join('admin', 'hero', 'videos', filename)
+        file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         
         # Return the URL path
@@ -5251,7 +5259,7 @@ def get_features_steps():
     """Get all features steps"""
     try:
         result = db.session.execute(text("""
-            SELECT id, step_number, step_title, step_description, step_image
+            SELECT id, step_number, step_title, step_description, step_image, step_video
             FROM features_steps 
             WHERE is_active = true
             ORDER BY step_number
@@ -5264,7 +5272,8 @@ def get_features_steps():
                 'step_number': row.step_number,
                 'step_title': row.step_title,
                 'step_description': row.step_description,
-                'step_image': row.step_image
+                'step_image': row.step_image,
+                'step_video': row.step_video
             })
         
         return jsonify({
@@ -5281,7 +5290,7 @@ def get_features_step(step_id):
     """Get specific features step by ID"""
     try:
         result = db.session.execute(text("""
-            SELECT id, step_number, step_title, step_description, step_image
+            SELECT id, step_number, step_title, step_description, step_image, step_video
             FROM features_steps 
             WHERE id = :step_id AND is_active = true
         """), {'step_id': step_id}).fetchone()
@@ -5296,7 +5305,8 @@ def get_features_step(step_id):
                 'step_number': result.step_number,
                 'step_title': result.step_title,
                 'step_description': result.step_description,
-                'step_image': result.step_image
+                'step_image': result.step_image,
+                'step_video': result.step_video
             }
         }), 200
         
@@ -5321,13 +5331,14 @@ def update_features_step(step_id):
         result = db.session.execute(text("""
             UPDATE features_steps 
             SET step_title = :step_title, step_description = :step_description, 
-                step_image = :step_image, updated_at = CURRENT_TIMESTAMP
+                step_image = :step_image, step_video = :step_video, updated_at = CURRENT_TIMESTAMP
             WHERE id = :step_id AND is_active = true
         """), {
             'step_id': step_id,
             'step_title': data['step_title'],
             'step_description': data['step_description'],
-            'step_image': data.get('step_image')
+            'step_image': data.get('step_image'),
+            'step_video': data.get('step_video')
         })
         
         if result.rowcount == 0:
@@ -5368,14 +5379,15 @@ def create_features_step():
         
         # Create new step
         result = db.session.execute(text("""
-            INSERT INTO features_steps (step_number, step_title, step_description, step_image)
-            VALUES (:step_number, :step_title, :step_description, :step_image)
+            INSERT INTO features_steps (step_number, step_title, step_description, step_image, step_video)
+            VALUES (:step_number, :step_title, :step_description, :step_image, :step_video)
             RETURNING id
         """), {
             'step_number': next_step_number,
             'step_title': data['step_title'],
             'step_description': data['step_description'],
-            'step_image': data.get('step_image', '')
+            'step_image': data.get('step_image', ''),
+            'step_video': data.get('step_video', '')
         })
         
         new_step_id = result.fetchone().id
@@ -5429,43 +5441,59 @@ def delete_features_step(step_id):
 
 @app.route('/api/features/section-title', methods=['GET'])
 def get_features_section_title():
-    """Get features section title"""
+    """Get features section title and tutorial video"""
     try:
-        result = db.session.execute(text("""
-            SELECT section_title FROM features_section 
-            WHERE id = 1
-        """)).fetchone()
+        # Try to get the section, or create a default one if it doesn't exist
+        section = FeaturesSection.query.filter_by(id=1).first()
         
-        section_title = result.section_title if result else 'How it Works'
+        if not section:
+            # Create a default section if it doesn't exist
+            section = FeaturesSection(
+                id=1,
+                section_title='How it Works',
+                tutorial_video_url=None
+            )
+            db.session.add(section)
+            db.session.commit()
         
         return jsonify({
             'success': True,
-            'section_title': section_title
+            'section_title': section.section_title,
+            'tutorial_video_url': section.tutorial_video_url
         }), 200
         
     except Exception as e:
         print(f"Error getting features section title: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to get section title'}), 500
 
 @app.route('/api/features/section-title', methods=['PUT'])
 @require_auth
 def update_features_section_title():
-    """Update features section title"""
+    """Update features section title and tutorial video"""
     try:
         data = request.get_json()
         
         if 'section_title' not in data:
             return jsonify({'error': 'Missing section_title field'}), 400
         
-        # Update or insert section title
-        result = db.session.execute(text("""
-            INSERT INTO features_section (id, section_title, updated_at)
-            VALUES (1, :section_title, CURRENT_TIMESTAMP)
-            ON CONFLICT (id) 
-            DO UPDATE SET 
-                section_title = :section_title,
-                updated_at = CURRENT_TIMESTAMP
-        """), {'section_title': data['section_title']})
+        # Get or create the section
+        section = FeaturesSection.query.filter_by(id=1).first()
+        
+        if section:
+            # Update existing section
+            section.section_title = data['section_title']
+            if 'tutorial_video_url' in data:
+                section.tutorial_video_url = data['tutorial_video_url'] or None
+        else:
+            # Create new section
+            section = FeaturesSection(
+                id=1,
+                section_title=data['section_title'],
+                tutorial_video_url=data.get('tutorial_video_url')
+            )
+            db.session.add(section)
         
         db.session.commit()
         
@@ -5476,8 +5504,109 @@ def update_features_section_title():
         
     except Exception as e:
         print(f"Error updating features section title: {e}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
         return jsonify({'error': 'Failed to update section title'}), 500
+
+@app.route('/api/features/upload-video', methods=['POST'])
+@require_auth
+def upload_features_video():
+    """Upload features step tutorial video"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check file type
+        allowed_extensions = {'mp4', 'webm', 'ogg', 'mov'}
+        if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            return jsonify({'error': 'Invalid file type. Allowed: MP4, WEBM, OGG, MOV'}), 400
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"features_video_{timestamp}_{file.filename}"
+        
+        # Ensure directory exists
+        upload_dir = os.path.join('admin', 'features', 'videos')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Save file
+        file_path = os.path.join(upload_dir, filename)
+        file.save(file_path)
+        
+        # Return the URL path
+        file_url = f"/admin/features/videos/{filename}"
+        
+        return jsonify({
+            'success': True,
+            'file_url': file_url,
+            'filename': filename
+        }), 200
+        
+    except Exception as e:
+        print(f"Error uploading features video: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to upload video: {str(e)}'}), 500
+
+@app.route('/api/features/tutorial-video', methods=['PUT'])
+@require_auth
+def update_tutorial_video():
+    """Update tutorial video URL for the section"""
+    try:
+        data = request.get_json()
+        
+        if 'tutorial_video_url' not in data:
+            return jsonify({'error': 'Missing tutorial_video_url field'}), 400
+        
+        # Update or insert tutorial video URL
+        result = db.session.execute(text("""
+            INSERT INTO features_section (id, tutorial_video_url, updated_at)
+            VALUES (1, :tutorial_video_url, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) 
+            DO UPDATE SET 
+                tutorial_video_url = :tutorial_video_url,
+                updated_at = CURRENT_TIMESTAMP
+        """), {'tutorial_video_url': data['tutorial_video_url']})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Tutorial video URL updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating tutorial video: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update tutorial video URL'}), 500
+
+@app.route('/admin/features/videos/<filename>')
+def serve_features_video(filename):
+    """Serve features tutorial videos"""
+    try:
+        upload_dir = os.path.join(os.getcwd(), 'admin', 'features', 'videos')
+        file_path = os.path.join(upload_dir, filename)
+        
+        if not os.path.exists(file_path):
+            print(f"File not found: {file_path}")
+            return jsonify({'error': 'File not found'}), 404
+        
+        response = send_from_directory(upload_dir, filename)
+        # Add CORS headers
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
+    except Exception as e:
+        print(f"Error serving features video: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Error serving file'}), 500
 
 # Team API Endpoints
 
@@ -5554,7 +5683,7 @@ def get_team_members():
             # Convert relative image URL to full URL
             image_url = member.image_url
             if image_url and not image_url.startswith('http'):
-                image_url = f"http://localhost:5000{image_url}"
+                image_url = f"http://localhost:5001{image_url}"
             
             members_list.append({
                 'id': member.id,
@@ -5587,7 +5716,7 @@ def get_team_member(member_id):
         # Convert relative image URL to full URL
         image_url = member.image_url
         if image_url and not image_url.startswith('http'):
-            image_url = f"http://localhost:5000{image_url}"
+            image_url = f"http://localhost:5001{image_url}"
         
         return jsonify({
             'success': True,
@@ -6269,6 +6398,32 @@ def seed_subscription_plans():
     except Exception as e:
         db.session.rollback()
         print(f"❌ Error seeding database: {e}")
+
+def seed_features_section():
+    """Seed the features_section table with initial data"""
+    
+    try:
+        # Check if data already exists
+        if FeaturesSection.query.count() > 0:
+            print("Features section already exists, skipping seeding")
+            return
+        
+        print("Seeding features section...")
+        
+        # Create default features section
+        features_section = FeaturesSection(
+            id=1,
+            section_title='How it Works',
+            tutorial_video_url=None
+        )
+        db.session.add(features_section)
+        db.session.commit()
+        
+        print("✅ Successfully seeded features section!")
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error seeding features section: {e}")
 
 # Admin endpoint to manually seed data
 @app.route('/api/admin/seed-subscription-plans', methods=['POST'])
@@ -6977,4 +7132,5 @@ if __name__ == '__main__':
         db.create_all()  # Create tables if they don't exist
         seed_regions()  # Seed regions data
         seed_subscription_plans()  # Seed initial data
+        seed_features_section()  # Seed features section
     app.run(debug=True, host='0.0.0.0', port=5001)

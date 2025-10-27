@@ -351,6 +351,7 @@ CREATE TABLE IF NOT EXISTS howitworks_properties (
 CREATE TABLE IF NOT EXISTS features_section (
     id INTEGER PRIMARY KEY DEFAULT 1,
     section_title VARCHAR(255) NOT NULL DEFAULT 'How it Works',
+    tutorial_video_url VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -361,6 +362,7 @@ CREATE TABLE IF NOT EXISTS features_steps (
     step_title VARCHAR(255) NOT NULL,
     step_description TEXT NOT NULL,
     step_image VARCHAR(500),
+    step_video VARCHAR(500),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
