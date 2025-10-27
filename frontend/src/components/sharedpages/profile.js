@@ -44,6 +44,7 @@ const Profile = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [apiError, setApiError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   
@@ -51,6 +52,22 @@ const Profile = () => {
   const [referralCode, setReferralCode] = useState('');
   const [selectedPlan, setSelectedPlan] = useState('monthly');
   const [isUpgrading, setIsUpgrading] = useState(false);
+  
+  // Payment form data
+  const [paymentData, setPaymentData] = useState({
+    cardNumber: '',
+    expiry: '',
+    cvv: '',
+    cardName: ''
+  });
+  
+  // Payment form errors
+  const [paymentErrors, setPaymentErrors] = useState({
+    cardNumber: '',
+    expiry: '',
+    cvv: '',
+    cardName: ''
+  });
   
   // User data from database
   const [userProfile, setUserProfile] = useState({
@@ -362,14 +379,141 @@ const Profile = () => {
   };
 
   const handleUpgradePlan = async () => {
+    // Validate plan selection
+    if (!selectedPlan) {
+      setApiError('Please select a plan (monthly or yearly)');
+      return;
+    }
+    
+    // Close the subscription modal and show checkout modal
+    setShowSubscriptionModal(false);
+    setShowCheckoutModal(true);
+  };
+
+  const handlePaymentInputChange = (e) => {
+    const { name, value } = e.target;
+    
+    // Validate based on field type and format input
+    let validatedValue = value;
+    
+    if (name === 'cardNumber') {
+      // Only allow numbers
+      validatedValue = value.replace(/[^\d]/g, '');
+      // Format as XXXX XXXX XXXX XXXX
+      validatedValue = validatedValue.replace(/(.{4})/g, '$1 ').trim();
+      // Limit to 16 digits
+      if (validatedValue.replace(/\s/g, '').length > 16) {
+        validatedValue = validatedValue.replace(/\s/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+      }
+    } else if (name === 'expiry') {
+      // Only allow numbers
+      validatedValue = value.replace(/[^\d]/g, '');
+      // Auto format MM/YY
+      if (validatedValue.length >= 2 && !validatedValue.includes('/')) {
+        validatedValue = validatedValue.slice(0, 4);
+        validatedValue = validatedValue.slice(0, 2) + '/' + validatedValue.slice(2);
+      }
+      // Limit to 4 digits
+      if (validatedValue.replace(/\//g, '').length > 4) {
+        validatedValue = validatedValue.replace(/\//g, '').slice(0, 4);
+        if (validatedValue.length >= 2) {
+          validatedValue = validatedValue.slice(0, 2) + '/' + validatedValue.slice(2);
+        }
+      }
+    } else if (name === 'cvv') {
+      // Only allow numbers, max 3 digits
+      validatedValue = value.replace(/[^\d]/g, '').slice(0, 3);
+    } else if (name === 'cardName') {
+      // Only allow letters, spaces, and hyphens
+      validatedValue = value.replace(/[^a-zA-Z\s-]/g, '');
+    }
+    
+    setPaymentData(prev => ({
+      ...prev,
+      [name]: validatedValue
+    }));
+    
+    // Clear error for this field when user starts typing
+    setPaymentErrors(prev => ({
+      ...prev,
+      [name]: ''
+    }));
+  };
+  
+  const handlePaymentBlur = (e) => {
+    const { name, value } = e.target;
+    let error = '';
+    
+    if (name === 'cardNumber') {
+      const cardDigits = value.replace(/\s/g, '');
+      if (!cardDigits || cardDigits.length < 13 || cardDigits.length > 16) {
+        error = 'Card number must be 13-16 digits';
+      }
+    } else if (name === 'expiry') {
+      if (!value || !/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(value)) {
+        error = 'Please enter valid expiry (MM/YY)';
+      }
+    } else if (name === 'cvv') {
+      if (!value || value.length !== 3) {
+        error = 'CVV must be 3 digits';
+      }
+    } else if (name === 'cardName') {
+      if (!value || value.length < 2) {
+        error = 'Please enter cardholder name';
+      }
+    }
+    
+    if (error) {
+      setPaymentErrors(prev => ({
+        ...prev,
+        [name]: error
+      }));
+    }
+  };
+
+  const handleCompletePayment = async () => {
     try {
       setIsUpgrading(true);
       setApiError('');
       setSuccessMessage('');
       
-      // Validate plan selection
-      if (!selectedPlan) {
-        setApiError('Please select a plan (monthly or yearly)');
+      // Validate all payment fields
+      const errors = {};
+      let hasErrors = false;
+      
+      // Card number validation
+      if (!paymentData.cardNumber || paymentData.cardNumber.replace(/\s/g, '').length < 13) {
+        errors.cardNumber = 'Please enter a valid card number (13-16 digits)';
+        hasErrors = true;
+      }
+      
+      // Expiry validation
+      if (!paymentData.expiry || !/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(paymentData.expiry)) {
+        errors.expiry = 'Please enter a valid expiry date (MM/YY)';
+        hasErrors = true;
+      }
+      
+      // CVV validation
+      if (!paymentData.cvv || paymentData.cvv.length !== 3) {
+        errors.cvv = 'CVV must be 3 digits';
+        hasErrors = true;
+      }
+      
+      // Cardholder name validation
+      if (!paymentData.cardName || paymentData.cardName.length < 2) {
+        errors.cardName = 'Please enter cardholder name (letters only)';
+        hasErrors = true;
+      }
+      
+      if (hasErrors) {
+        setPaymentErrors(errors);
+        setApiError('Please correct the errors in the payment form');
+        return;
+      }
+      
+      // Check for existing field errors
+      if (paymentErrors.cardNumber || paymentErrors.expiry || paymentErrors.cvv || paymentErrors.cardName) {
+        setApiError('Please correct the errors in the payment form');
         return;
       }
       
@@ -397,11 +541,17 @@ const Profile = () => {
       localStorage.setItem('userType', 'premium');
       
       setSuccessMessage(`Successfully upgraded to Premium ${selectedPlan} plan! Redirecting to dashboard...`);
-      setShowSubscriptionModal(false);
+      setShowCheckoutModal(false);
       
       // Reset form
       setReferralCode('');
       setSelectedPlan('monthly');
+      setPaymentData({
+        cardNumber: '',
+        expiry: '',
+        cvv: '',
+        cardName: ''
+      });
       
       // Redirect to dashboard after a short delay to show success message
       setTimeout(() => {
@@ -414,6 +564,32 @@ const Profile = () => {
     } finally {
       setIsUpgrading(false);
     }
+  };
+
+  const handleCloseCheckoutModal = () => {
+    setShowCheckoutModal(false);
+    // Reset payment data and errors when closing
+    setPaymentData({
+      cardNumber: '',
+      expiry: '',
+      cvv: '',
+      cardName: ''
+    });
+    setPaymentErrors({
+      cardNumber: '',
+      expiry: '',
+      cvv: '',
+      cardName: ''
+    });
+  };
+
+  const handleBackToSubscription = () => {
+    setShowCheckoutModal(false);
+    setShowSubscriptionModal(true);
+  };
+
+  const getPlanPrice = () => {
+    return selectedPlan === 'yearly' ? '199.99' : '29';
   };
 
   const handleDowngradePlan = async () => {
@@ -962,6 +1138,179 @@ const Profile = () => {
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Checkout Modal */}
+      {showCheckoutModal && (
+        <div className="profile-modal-overlay checkout-modal-overlay">
+          <div className="checkout-modal-container">
+            {/* Left Panel - Payment Form */}
+            <div className="checkout-form-panel">
+              <div className="checkout-header">
+                <button 
+                  className="checkout-back-btn"
+                  onClick={handleBackToSubscription}
+                >
+                  ← Back
+                </button>
+              </div>
+              
+              <div className="checkout-content">
+                <h2 className="checkout-title">Payment</h2>
+                <p className="checkout-subtitle">Enter your payment details to complete the upgrade</p>
+                
+                {/* Error and Success Messages */}
+                {apiError && (
+                  <div className="checkout-error-message">
+                    {apiError}
+                  </div>
+                )}
+                
+                <div className="payment-form">
+                  <div className="form-group">
+                    <label htmlFor="cardNumber">Card Number</label>
+                    <div className={`input-container ${paymentErrors.cardNumber ? 'input-error' : ''}`}>
+                      <span className="input-icon">💳</span>
+                      <input
+                        type="text"
+                        id="cardNumber"
+                        name="cardNumber"
+                        value={paymentData.cardNumber}
+                        onChange={handlePaymentInputChange}
+                        onBlur={handlePaymentBlur}
+                        placeholder="1234 5678 9012 3456"
+                        className="card-input"
+                        maxLength={19}
+                      />
+                    </div>
+                    {paymentErrors.cardNumber && (
+                      <span className="field-error">{paymentErrors.cardNumber}</span>
+                    )}
+                  </div>
+
+                  <div className="card-row">
+                    <div className="form-group">
+                      <label htmlFor="expiry">Expiry Date</label>
+                      <div className={`input-container ${paymentErrors.expiry ? 'input-error' : ''}`}>
+                        <span className="input-icon">📅</span>
+                        <input
+                          type="text"
+                          id="expiry"
+                          name="expiry"
+                          value={paymentData.expiry}
+                          onChange={handlePaymentInputChange}
+                          onBlur={handlePaymentBlur}
+                          placeholder="MM/YY"
+                          className="card-input"
+                          maxLength={5}
+                        />
+                      </div>
+                      {paymentErrors.expiry && (
+                        <span className="field-error">{paymentErrors.expiry}</span>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="cvv">CVV</label>
+                      <div className={`input-container ${paymentErrors.cvv ? 'input-error' : ''}`}>
+                        <span className="input-icon">🔒</span>
+                        <input
+                          type="text"
+                          id="cvv"
+                          name="cvv"
+                          value={paymentData.cvv}
+                          onChange={handlePaymentInputChange}
+                          onBlur={handlePaymentBlur}
+                          placeholder="123"
+                          className="card-input"
+                          maxLength={3}
+                        />
+                      </div>
+                      {paymentErrors.cvv && (
+                        <span className="field-error">{paymentErrors.cvv}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="cardName">Cardholder Name</label>
+                    <div className={`input-container ${paymentErrors.cardName ? 'input-error' : ''}`}>
+                      <span className="input-icon">👤</span>
+                      <input
+                        type="text"
+                        id="cardName"
+                        name="cardName"
+                        value={paymentData.cardName}
+                        onChange={handlePaymentInputChange}
+                        onBlur={handlePaymentBlur}
+                        placeholder="Enter cardholder name"
+                        className="card-input"
+                      />
+                    </div>
+                    {paymentErrors.cardName && (
+                      <span className="field-error">{paymentErrors.cardName}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="checkout-buttons">
+                  <button 
+                    className="checkout-back-button"
+                    onClick={handleBackToSubscription}
+                    disabled={isUpgrading}
+                  >
+                    Back
+                  </button>
+                  <button 
+                    className="checkout-complete-btn"
+                    onClick={handleCompletePayment}
+                    disabled={isUpgrading}
+                  >
+                    {isUpgrading ? 'Processing...' : 'Complete Payment'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Panel - Summary Overlay */}
+            <div className="checkout-visual-panel">
+              <img
+                src="https://www.traveltalktours.com/wp-content/uploads/2023/12/swapnil-bapat-sJ7pYyJFyuA-unsplash-1-scaled.jpg"
+                alt="Singapore Cityscape"
+                className="checkout-photo"
+              />
+              
+              {/* Payment Summary Overlay */}
+              <div className="payment-summary-overlay">
+                <div className="summary-box">
+                  <h3>Summary</h3>
+                  <div className="summary-plan">
+                    <span className="plan-price">
+                      ${getPlanPrice()}{selectedPlan === 'yearly' ? '/year' : '/month'}
+                    </span>
+                    <span className="plan-name">
+                      Premium Plan
+                    </span>
+                  </div>
+                  <div className="summary-breakdown">
+                    <div className="summary-item">
+                      <span>Subtotal:</span>
+                      <span>${getPlanPrice()}</span>
+                    </div>
+                    <div className="summary-item">
+                      <span>Tax:</span>
+                      <span>$0</span>
+                    </div>
+                    <div className="summary-divider"></div>
+                    <div className="summary-total">
+                      <span>Total:</span>
+                      <span>${getPlanPrice()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
