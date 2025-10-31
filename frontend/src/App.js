@@ -27,6 +27,8 @@ import Comparison from './components/user/comparison';
 import Bookmarks from './components/user/bookmarks';
 import PropertyListings from './components/user/PropertyListings';
 import PropertyListing from './components/user/PropertyListing';
+import EnhancedPropertySearch from './components/user/EnhancedPropertySearch';
+import TrialSystem from './components/user/TrialSystem';
 import Feedback from './components/sharedpages/feedback';
 import Support from './components/sharedpages/support';
 import Profile from './components/sharedpages/profile';
@@ -83,6 +85,8 @@ function App() {
         <Route path="/dashboard/comparison" element={<Comparison />} />
         <Route path="/dashboard/property-listings" element={<PropertyListings />} />
         <Route path="/dashboard/property-listing/:id" element={<PropertyListing />} />
+        <Route path="/dashboard/enhanced-search" element={<EnhancedPropertySearch />} />
+        <Route path="/dashboard/trial" element={<TrialSystem />} />
         <Route path="/bookmarks" element={<Bookmarks />} />
 
         <Route path="/dashboard/agent" element={<AgentUser />} />
@@ -130,4 +134,3 @@ function App() {
 }
 
 export default App;
-

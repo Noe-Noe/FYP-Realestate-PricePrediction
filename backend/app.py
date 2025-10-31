@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask_mail import Mail, Message
-from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, Region, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature, FeaturesSection, FeaturesStep
+from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, Region, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature, FeaturesSection, FeaturesStep, UserProfile
 from sqlalchemy import text
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -4326,6 +4326,110 @@ def serve_property_image(filename):
     except Exception as e:
         print(f"Error serving file: {e}")
         return jsonify({'error': 'Error serving file'}), 500
+
+
+# Trial system endpoints
+@app.route('/api/trial/check', methods=['GET'])
+@require_auth
+def check_trial_status():
+    """Check if user has trial available or used"""
+    try:
+        current_user = request.user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get or create user profile
+        user_profile = UserProfile.query.filter_by(user_id=user.id).first()
+        if not user_profile:
+            user_profile = UserProfile(user_id=user.id)
+            db.session.add(user_profile)
+            db.session.commit()
+        
+        return jsonify({
+            'trial_used': user_profile.trial_used,
+            'trial_predictions_used': user_profile.trial_predictions_used,
+            'max_trial_predictions': user_profile.max_trial_predictions,
+            'trial_available': not user_profile.trial_used and user_profile.trial_predictions_used < user_profile.max_trial_predictions,
+            'trial_start_date': user_profile.trial_start_date.isoformat() if user_profile.trial_start_date else None,
+            'trial_end_date': user_profile.trial_end_date.isoformat() if user_profile.trial_end_date else None
+        }), 200
+        
+    except Exception as e:
+        print(f"Error checking trial status: {e}")
+        return jsonify({'error': 'Failed to check trial status'}), 500
+
+@app.route('/api/trial/start', methods=['POST'])
+@require_auth
+def start_trial():
+    """Start trial for user"""
+    try:
+        current_user = request.user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get or create user profile
+        user_profile = UserProfile.query.filter_by(user_id=user.id).first()
+        if not user_profile:
+            user_profile = UserProfile(user_id=user.id)
+            db.session.add(user_profile)
+        
+        # Check if trial already used
+        if user_profile.trial_used:
+            return jsonify({'error': 'Trial already used'}), 400
+        
+        # Start trial
+        user_profile.trial_start_date = datetime.utcnow()
+        user_profile.trial_end_date = datetime.utcnow() + timedelta(days=7)  # 7-day trial
+        user_profile.trial_used = True
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Trial started successfully',
+            'trial_start_date': user_profile.trial_start_date.isoformat(),
+            'trial_end_date': user_profile.trial_end_date.isoformat(),
+            'max_predictions': user_profile.max_trial_predictions
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error starting trial: {e}")
+        return jsonify({'error': 'Failed to start trial'}), 500
+
+@app.route('/api/trial/use-prediction', methods=['POST'])
+@require_auth
+def use_trial_prediction():
+    """Use a trial prediction"""
+    try:
+        current_user = request.user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get user profile
+        user_profile = UserProfile.query.filter_by(user_id=user.id).first()
+        if not user_profile:
+            return jsonify({'error': 'User profile not found'}), 404
+        
+        # Check if trial is available
+        if user_profile.trial_predictions_used >= user_profile.max_trial_predictions:
+            return jsonify({'error': 'Trial predictions exhausted'}), 400
+        
+        # Increment trial predictions used
+        user_profile.trial_predictions_used += 1
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Trial prediction used successfully',
+            'predictions_remaining': user_profile.max_trial_predictions - user_profile.trial_predictions_used
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error using trial prediction: {e}")
+        return jsonify({'error': 'Failed to use trial prediction'}), 500
 
 # User preferences and recommendations endpoints
 @app.route('/api/onboarding/save-preferences', methods=['POST'])

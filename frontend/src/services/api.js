@@ -693,6 +693,24 @@ export const contactAPI = {
   },
 };
 
+export const trialAPI = {
+  // Check trial status
+  checkStatus: async () => {
+    return apiCall('/trial/check');
+  },
+
+  // Start trial
+  startTrial: async () => {
+    return apiCall('/trial/start', 'POST');
+  },
+
+  // Use trial prediction
+  usePrediction: async () => {
+    return apiCall('/trial/use-prediction', 'POST');
+  },
+};
+
+
 // Price Prediction API calls
 export const predictionAPI = {
   // Generate ML-based price prediction

@@ -125,4 +125,3 @@ psql -U postgres -d fyp_app -c "\\dt"
 ---
 If you run into setup issues on macOS, share the exact error output and your chip type (Apple Silicon vs Intel) so we can tailor the fix.
 
-
