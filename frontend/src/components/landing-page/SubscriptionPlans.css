@@ -1,0 +1,478 @@
+/* Landing Page Subscription Plans Section - Specific to avoid conflicts */
+.landing-page .subscription-plans,
+.subscription-plans {
+  padding: 3rem 0;
+  background: var(--bg-primary);
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.landing-page .plans-container,
+.plans-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  text-align: center;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-page .plans-header,
+.plans-header {
+  margin-bottom: 3rem;
+  width: 100%;
+}
+
+.landing-page .plans-title,
+.plans-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  font-family: 'Poppins', sans-serif;
+  text-align: center;
+}
+
+.landing-page .plans-subtitle,
+.plans-subtitle {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+  font-family: 'Poppins', sans-serif;
+  text-align: center;
+}
+
+/* Pricing Toggle */
+.landing-page .pricing-toggle,
+.pricing-toggle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 3rem;
+  background: var(--bg-primary);
+  padding: 0.5rem;
+  border-radius: 12px;
+  max-width: 300px;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: var(--shadow-sm);
+  width: fit-content; /* Ensure toggle fits content */
+}
+
+.landing-page .toggle-btn,
+.toggle-btn {
+  padding: 0.75rem 1.5rem;
+  border: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.875rem;
+}
+
+.landing-page .toggle-btn.active,
+.toggle-btn.active {
+  background: var(--primary-blue);
+  color: white;
+  border-color: var(--primary-blue);
+}
+
+.landing-page .save-badge,
+.save-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--accent-green);
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+/* Plans Grid */
+.landing-page .plans-grid,
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: stretch; /* Make all cards the same height */
+}
+
+/* Ensure pricing toggle and plans are aligned */
+.landing-page .pricing-toggle,
+.pricing-toggle {
+  align-self: center; /* Center toggle within flex container */
+}
+
+/* Plan Cards */
+.landing-page .plan-card,
+.plan-card {
+  background: var(--bg-primary);
+  border: 2px solid var(--border-light);
+  border-radius: 16px;
+  padding: 2rem 1.5rem;
+  transition: all 0.3s ease;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  text-align: center;
+  width: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 600px; /* Fixed height for all cards */
+  height: 100%; /* Take full height of grid cell */
+}
+
+.landing-page .plan-card.selected,
+.plan-card.selected {
+  border-color: var(--primary-blue);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Popular plan styling */
+.landing-page .plan-card.popular,
+.plan-card.popular {
+  border-color: var(--primary-blue);
+  box-shadow: var(--shadow-lg);
+  transform: scale(1.05);
+}
+
+.landing-page .plan-card.popular::before,
+.plan-card.popular::before {
+  content: 'Most Popular';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--primary-blue);
+  color: #fff;
+  padding: 0.5rem 1.5rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+}
+
+/* Highlight effect on hover for any card */
+.landing-page .plan-card:hover,
+.plan-card:hover {
+  transform: translateY(-8px);
+  border-color: var(--primary-blue);
+  box-shadow: var(--shadow-xl);
+}
+
+/* Plan Badge */
+.landing-page .plan-badge,
+.plan-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent-green);
+  color: white;
+  padding: 0.5rem 1.5rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+  white-space: nowrap; /* Prevent badge text from wrapping */
+}
+
+/* Plan Header */
+.landing-page .plan-header,
+.plan-header {
+  margin-bottom: 1.5rem;
+  margin-top: 1rem; /* Add top margin to separate from badge */
+  text-align: center;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.landing-page .plan-name,
+.plan-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 1rem; /* Add more space below plan name */
+  text-align: center;
+  display: block; /* Ensure it's on its own line */
+  width: 100%;
+}
+
+
+/* Plan Price Container */
+.landing-page .plan-price-container,
+.plan-price-container {
+  margin-bottom: 1.5rem;
+  min-height: 80px; /* Ensure consistent price area height */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.landing-page .plan-price,
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: nowrap;
+}
+
+.landing-page .price-amount,
+.price-amount {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--primary-blue);
+  display: inline-block;
+}
+
+.landing-page .price-period,
+.price-period {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  display: inline-block;
+}
+
+.landing-page .original-price,
+.original-price {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-decoration: line-through;
+  margin-bottom: 0.5rem;
+}
+
+.landing-page .yearly-savings,
+.yearly-savings {
+  font-size: 0.875rem;
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
+/* Plan Icon */
+.landing-page .plan-icon,
+.plan-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1.5rem;
+  object-fit: contain;
+}
+
+/* Plan Features */
+.landing-page .plan-features,
+.plan-features {
+  margin-bottom: 2rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  text-align: left;
+  min-height: 200px; /* Ensure consistent feature area height */
+}
+
+.landing-page .feature-item,
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.landing-page .feature-item:last-child {
+  margin-bottom: 0;
+}
+
+.landing-page .checkmark,
+.checkmark {
+  background: var(--accent-green);
+  color: #fff;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Plan Button */
+.landing-page .plan-button,
+.plan-button {
+  width: 100%;
+  padding: 1rem 2rem;
+  border: 2px solid var(--border-medium);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Poppins', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+/* Popular plan button styling */
+.landing-page .plan-card.popular .plan-button,
+.plan-card.popular .plan-button {
+  background: var(--primary-blue);
+  color: white;
+  border-color: var(--primary-blue);
+}
+
+.landing-page .plan-button:hover,
+.plan-button:hover {
+  background: var(--primary-blue);
+  color: #fff;
+  border-color: var(--primary-blue);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Plan Comparison */
+.landing-page .plan-comparison,
+.plan-comparison {
+  margin-top: 3rem;
+  text-align: center;
+  padding: 2rem;
+  background: var(--bg-primary);
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.landing-page .plan-comparison h4,
+.plan-comparison h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1.5rem;
+}
+
+.landing-page .comparison-features,
+.comparison-features {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0 auto;
+}
+
+.landing-page .comparison-features span,
+.comparison-features span {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  border: 1px solid var(--border-light);
+}
+
+/* Responsive Design */
+@media (max-width: 900px) {
+  .landing-page .subscription-plans,
+  .subscription-plans {
+    padding: 4rem 0;
+  }
+  
+  .landing-page .plans-grid,
+  .plans-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+    max-width: 800px;
+  }
+  
+  .landing-page .plans-title,
+  .plans-title {
+    font-size: 2rem;
+  }
+  
+  .landing-page .plans-subtitle,
+  .plans-subtitle {
+    font-size: 1rem;
+  }
+  
+  .landing-page .plan-card,
+  .plan-card {
+    padding: 2rem 1.5rem;
+    min-height: 450px;
+  }
+}
+
+@media (max-width: 600px) {
+  .landing-page .subscription-plans,
+  .subscription-plans {
+    padding: 3rem 0;
+  }
+  
+  .landing-page .plans-container,
+  .plans-container {
+    padding: 0 1rem;
+  }
+  
+  .landing-page .plans-grid,
+  .plans-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    max-width: 400px;
+  }
+  
+  .landing-page .plans-title,
+  .plans-title {
+    font-size: 1.75rem;
+  }
+  
+  .landing-page .plan-card,
+  .plan-card {
+    padding: 1.5rem 1rem;
+    min-height: 400px;
+  }
+  
+  .landing-page .plan-price,
+  .plan-price {
+    font-size: 2rem;
+  }
+  
+  .landing-page .comparison-features,
+  .comparison-features {
+    flex-direction: column;
+    align-items: center;
+  }
+}

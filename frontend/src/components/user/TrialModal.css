@@ -1,0 +1,276 @@
+.trial-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.trial-modal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: trialModalSlideIn 0.3s ease-out;
+}
+
+@keyframes trialModalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.trial-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 24px 0 24px;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 24px;
+}
+
+.trial-modal-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.trial-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.trial-modal-close:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.trial-modal-content {
+  padding: 0 24px 24px 24px;
+}
+
+.trial-loading {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.trial-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.trial-error {
+  text-align: center;
+  padding: 20px;
+}
+
+.trial-error p {
+  color: #dc2626;
+  margin-bottom: 16px;
+}
+
+.trial-retry-btn {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.trial-retry-btn:hover {
+  background-color: #2563eb;
+}
+
+.trial-status {
+  text-align: center;
+}
+
+.trial-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.trial-available h3,
+.trial-used h3 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.trial-available p,
+.trial-used p {
+  margin: 0 0 24px 0;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.trial-features {
+  background-color: #f9fafb;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 24px 0;
+  text-align: left;
+}
+
+.trial-feature {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.trial-feature:last-child {
+  margin-bottom: 0;
+}
+
+.trial-feature-icon {
+  margin-right: 12px;
+  font-size: 16px;
+}
+
+.trial-feature span:last-child {
+  color: #374151;
+  font-weight: 500;
+}
+
+.trial-stats {
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.trial-stats p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.trial-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.trial-start-btn {
+  flex: 1;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 16px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.trial-start-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.trial-start-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.trial-upgrade-btn {
+  flex: 1;
+  background-color: #10b981;
+  color: white;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.trial-upgrade-btn:hover {
+  background-color: #059669;
+  transform: translateY(-1px);
+}
+
+.trial-upgrade-btn.primary {
+  flex: 2;
+}
+
+.trial-cancel-btn {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.trial-cancel-btn:hover {
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+/* Responsive design */
+@media (max-width: 640px) {
+  .trial-modal {
+    margin: 10px;
+    max-width: none;
+  }
+  
+  .trial-modal-header {
+    padding: 20px 20px 0 20px;
+  }
+  
+  .trial-modal-content {
+    padding: 0 20px 20px 20px;
+  }
+  
+  .trial-actions {
+    flex-direction: column;
+  }
+  
+  .trial-start-btn,
+  .trial-upgrade-btn,
+  .trial-cancel-btn {
+    flex: none;
+  }
+}
