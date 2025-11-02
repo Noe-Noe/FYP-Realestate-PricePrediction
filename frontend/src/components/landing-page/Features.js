@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import './Features.css';
-import api from '../../services/api';
+import api, { BACKEND_ORIGIN } from '../../services/api';
 
 const Features = () => {
   const [steps, setSteps] = useState([]);
   const [sectionTitle, setSectionTitle] = useState('How it Works');
+  const [tutorialVideoUrl, setTutorialVideoUrl] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Fetch features steps and section title from API
@@ -25,6 +26,8 @@ const Features = () => {
         
         if (titleResponse.success) {
           setSectionTitle(titleResponse.section_title);
+          const videoUrl = titleResponse.tutorial_video_url || '';
+          setTutorialVideoUrl(videoUrl);
         }
       } catch (error) {
         console.error('Error fetching features data:', error);
@@ -37,6 +40,14 @@ const Features = () => {
 
     fetchData();
   }, []);
+
+  // Helper function to get the full video URL
+  const getVideoUrl = () => {
+    if (!tutorialVideoUrl) return null;
+    return tutorialVideoUrl.startsWith('/') && !tutorialVideoUrl.startsWith('//')
+      ? `${BACKEND_ORIGIN}${tutorialVideoUrl}` 
+      : tutorialVideoUrl;
+  };
 
   return (
     <section className="features" id="how">
@@ -78,6 +89,21 @@ const Features = () => {
           ))
         )}
       </div>
+      
+      {/* Tutorial Video Section */}
+      {tutorialVideoUrl && (
+        <div className="features-tutorial-section">
+          <div className="features-tutorial-video-container">
+            <video
+              src={getVideoUrl()}
+              controls
+              className="features-tutorial-video"
+            >
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

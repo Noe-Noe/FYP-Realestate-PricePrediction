@@ -56,6 +56,7 @@ class Property(db.Model):
     parking_spaces = db.Column(db.Integer)
     asking_price = db.Column(db.Numeric(12, 2), nullable=False)
     price_type = db.Column(db.String(20), default='sale')
+    rental_price = db.Column(db.Numeric(12, 2))  # Monthly rental price
     status = db.Column(db.String(20), default='active')
     latitude = db.Column(db.Numeric(10, 8))
     longitude = db.Column(db.Numeric(11, 8))
@@ -73,12 +74,16 @@ class AgentProfile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
     license_number = db.Column(db.String(50))
+    license_issue_date = db.Column(db.Date)  # When license was issued
+    license_expiry_date = db.Column(db.Date)  # When license expires
+    cea_verified = db.Column(db.Boolean, default=False)  # CEA database verification status
+    cea_verification_date = db.Column(db.DateTime)  # When CEA verification was completed
     company_name = db.Column(db.String(255))
     company_phone = db.Column(db.String(20))
     company_email = db.Column(db.String(255))
     license_picture_url = db.Column(db.String(500))
     years_experience = db.Column(db.Integer)
-    specializations = db.Column(db.JSON)  # Array of specializations
+    specializations = db.Column(db.JSON)  # Array of specializations (commercial, industrial, residential)
     bio = db.Column(db.Text)
     contact_preferences = db.Column(db.JSON)  # Array of contact preferences
     
@@ -87,6 +92,17 @@ class AgentProfile(db.Model):
     
     # Track first-time agent onboarding status
     first_time_agent = db.Column(db.Boolean, default=True)
+
+class Region(db.Model):
+    __tablename__ = 'regions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    district = db.Column(db.String(10), nullable=False)
+    sector = db.Column(db.String(100), nullable=False)
+    location = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class AgentRegion(db.Model):
     __tablename__ = 'agent_regions'
@@ -241,6 +257,28 @@ class Bookmark(db.Model):
     # Relationships
     user = db.relationship('User', backref='bookmarks')
 
+class FeaturesSection(db.Model):
+    __tablename__ = 'features_section'
+    
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    section_title = db.Column(db.String(255), nullable=False, default='How it Works')
+    tutorial_video_url = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class FeaturesStep(db.Model):
+    __tablename__ = 'features_steps'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    step_number = db.Column(db.Integer, nullable=False)
+    step_title = db.Column(db.String(255), nullable=False)
+    step_description = db.Column(db.Text, nullable=False)
+    step_image = db.Column(db.String(500))
+    step_video = db.Column(db.String(500))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class TeamSection(db.Model):
     __tablename__ = 'team_section'
     
@@ -316,3 +354,91 @@ class ImportantFeature(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class School(db.Model):
+    __tablename__ = 'schools'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    school_type = db.Column(db.String(50), nullable=False)  # 'primary', 'secondary', 'junior_college', 'university'
+    address = db.Column(db.String(500), nullable=False)
+    latitude = db.Column(db.Numeric(10, 8), nullable=False)
+    longitude = db.Column(db.Numeric(11, 8), nullable=False)
+    postal_code = db.Column(db.String(10))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Amenity(db.Model):
+    __tablename__ = 'amenities'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    amenity_type = db.Column(db.String(50), nullable=False)  # 'shopping', 'healthcare', 'transport', 'recreation', 'dining'
+    address = db.Column(db.String(500), nullable=False)
+    latitude = db.Column(db.Numeric(10, 8), nullable=False)
+    longitude = db.Column(db.Numeric(11, 8), nullable=False)
+    postal_code = db.Column(db.String(10))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class UserProfile(db.Model):
+    __tablename__ = 'user_profiles'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
+    
+    # Personalization data
+    search_history = db.Column(db.JSON)  # Store search queries and filters
+    click_tracking = db.Column(db.JSON)  # Track what properties/features user clicked
+    view_duration = db.Column(db.JSON)  # Track time spent on different pages
+    preferences_updated_at = db.Column(db.DateTime)
+    
+    # Trial system
+    trial_used = db.Column(db.Boolean, default=False)
+    trial_start_date = db.Column(db.DateTime)
+    trial_end_date = db.Column(db.DateTime)
+    trial_predictions_used = db.Column(db.Integer, default=0)  # Track number of trial predictions used
+    max_trial_predictions = db.Column(db.Integer, default=1)  # Maximum trial predictions allowed
+    
+    # Relationships
+    user = db.relationship('User', backref='user_profile')
+
+class UserInteraction(db.Model):
+    __tablename__ = 'user_interactions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Can be anonymous
+    interaction_type = db.Column(db.String(50), nullable=False)  # 'click', 'view', 'search', 'bookmark'
+    target_type = db.Column(db.String(50), nullable=False)  # 'property', 'prediction', 'comparison', 'page'
+    target_id = db.Column(db.Integer, nullable=True)  # ID of the target object
+    target_data = db.Column(db.JSON)  # Additional data about the interaction
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='interactions')
+
+class Review(db.Model):
+    __tablename__ = 'reviews'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    review_type = db.Column(db.String(50), nullable=False)  # 'platform', 'property', 'agent', 'prediction'
+    target_id = db.Column(db.Integer, nullable=True)  # ID of the target being reviewed
+    rating = db.Column(db.Integer, nullable=False)  # 1-5 stars
+    review_text = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(50), default='general')  # 'general', 'service', 'accuracy', 'usability'
+    is_verified = db.Column(db.Boolean, default=False)  # Admin verification
+    is_published = db.Column(db.Boolean, default=False)  # Admin approval for publishing
+    likes = db.Column(db.Integer, default=0)
+    dislikes = db.Column(db.Integer, default=0)
+    admin_response = db.Column(db.Text)
+    admin_response_date = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='reviews')

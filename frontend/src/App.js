@@ -27,6 +27,8 @@ import Comparison from './components/user/comparison';
 import Bookmarks from './components/user/bookmarks';
 import PropertyListings from './components/user/PropertyListings';
 import PropertyListing from './components/user/PropertyListing';
+import EnhancedPropertySearch from './components/user/EnhancedPropertySearch';
+import TrialSystem from './components/user/TrialSystem';
 import Feedback from './components/sharedpages/feedback';
 import Support from './components/sharedpages/support';
 import Profile from './components/sharedpages/profile';
@@ -38,6 +40,7 @@ import FeedbackManagement from './components/system/FeedbackManagement';
 import RespondToFeedback from './components/system/RespondToFeedback';
 import ViewFeedback from './components/system/ViewFeedback';
 import ContentManagement from './components/system/ContentManagement';
+import RegionsManagement from './components/system/RegionsManagement';
 import EditHeroSection from './components/system/EditHeroSection';
 import EditHowItWorks from './components/system/EditHowItWorks';
 import EditSeeHowItWorks from './components/system/EditSeeHowItWorks';
@@ -82,6 +85,8 @@ function App() {
         <Route path="/dashboard/comparison" element={<Comparison />} />
         <Route path="/dashboard/property-listings" element={<PropertyListings />} />
         <Route path="/dashboard/property-listing/:id" element={<PropertyListing />} />
+        <Route path="/dashboard/enhanced-search" element={<EnhancedPropertySearch />} />
+        <Route path="/dashboard/trial" element={<TrialSystem />} />
         <Route path="/bookmarks" element={<Bookmarks />} />
 
         <Route path="/dashboard/agent" element={<AgentUser />} />
@@ -101,6 +106,7 @@ function App() {
         <Route path="/dashboard/respond-to-feedback/:feedbackId" element={<RespondToFeedback />} />
         <Route path="/dashboard/view-feedback/:feedbackId" element={<ViewFeedback />} />
         <Route path="/dashboard/content-management" element={<ContentManagement />} />
+        <Route path="/dashboard/regions-management" element={<RegionsManagement />} />
         <Route path="/dashboard/edit-hero-section" element={<EditHeroSection />} />
         <Route path="/dashboard/edit-how-it-works" element={<EditHowItWorks />} />
         <Route path="/dashboard/edit-see-how-it-works" element={<EditSeeHowItWorks />} />
@@ -128,4 +134,3 @@ function App() {
 }
 
 export default App;
-

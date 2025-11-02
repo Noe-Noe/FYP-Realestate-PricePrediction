@@ -17,7 +17,8 @@ const Navbar = ({ activeTab, setActiveTab }) => {
         { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
         { id: 'user-accounts', label: 'User Accounts', icon: '👥' },
         { id: 'feedback', label: 'Feedback', icon: '💬' },
-        { id: 'content', label: 'Content', icon: '📄' }
+        { id: 'content', label: 'Content', icon: '📄' },
+        { id: 'regions', label: 'Regions', icon: '📍' }
       ];
     } else if (userType === 'agent') {
       return [
@@ -75,6 +76,10 @@ const Navbar = ({ activeTab, setActiveTab }) => {
         case 'content':
           console.log('Navigating to dashboard/content-management');
           navigate('/dashboard/content-management');
+          break;
+        case 'regions':
+          console.log('Navigating to dashboard/regions-management');
+          navigate('/dashboard/regions-management');
           break;
         default:
           break;

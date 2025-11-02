@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask_mail import Mail, Message
-from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature
+from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, Region, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature, FeaturesSection, FeaturesStep, UserProfile
 from sqlalchemy import text
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -93,7 +93,7 @@ def require_auth(f):
     return decorated_function
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://postgres:password@localhost:5432/fyp_app')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///instance/fyp_app.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
@@ -3197,22 +3197,25 @@ def complete_user_onboarding():
     """Mark user as having completed first-time onboarding"""
     try:
         current_user = request.user
-        data = request.get_json()
+        user_id = current_user['user_id']
         
         # Update user's first_time_user status
-        user = User.query.get(current_user['user_id'])
+        user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
         user.first_time_user = False
         db.session.commit()
         
+        print(f"Successfully completed user onboarding for user {user_id}")
         return jsonify({'message': 'Onboarding completed successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
+        import traceback
         print(f"Error completing user onboarding: {e}")
-        return jsonify({'error': 'Failed to complete onboarding'}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to complete onboarding: {str(e)}'}), 500
 
 @app.route('/api/onboarding/complete-agent', methods=['POST'])
 @require_auth
@@ -3220,25 +3223,40 @@ def complete_agent_onboarding():
     """Mark agent as having completed first-time region selection"""
     try:
         current_user = request.user
-        data = request.get_json()
+        user_id = current_user['user_id']
         
         # Verify user is an agent
-        user = User.query.get(current_user['user_id'])
-        if not user or user.user_type != 'agent':
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if user.user_type != 'agent':
             return jsonify({'error': 'User is not an agent'}), 403
         
-        # Update agent profile's first_time_agent status
-        agent_profile = AgentProfile.query.filter_by(user_id=current_user['user_id']).first()
-        if agent_profile:
-            agent_profile.first_time_agent = False
-            db.session.commit()
+        # Get or create agent profile
+        agent_profile = AgentProfile.query.filter_by(user_id=user_id).first()
+        if not agent_profile:
+            # Create agent profile if it doesn't exist
+            print(f"Agent profile not found for user {user_id}, creating one...")
+            agent_profile = AgentProfile(
+                user_id=user_id,
+                first_time_agent=False
+            )
+            db.session.add(agent_profile)
         
+        # Update agent profile's first_time_agent status
+        agent_profile.first_time_agent = False
+        db.session.commit()
+        
+        print(f"Successfully completed agent onboarding for user {user_id}")
         return jsonify({'message': 'Agent onboarding completed successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
+        import traceback
         print(f"Error completing agent onboarding: {e}")
-        return jsonify({'error': 'Failed to complete agent onboarding'}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to complete agent onboarding: {str(e)}'}), 500
 
 @app.route('/api/onboarding/agent-status', methods=['GET'])
 @require_auth
@@ -3428,49 +3446,45 @@ def update_agent_regions():
         # Delete existing regions for this agent
         AgentRegion.query.filter_by(agent_id=current_user['user_id']).delete()
         
-        # Add new regions
-        for region_id in selected_regions:
-            # Map region ID to region data
-            region_map = {
-                1: {'name': 'District 1', 'type': 'district', 'value': 'Raffles Place, Cecil, Marina, People\'s Park'},
-                2: {'name': 'District 2', 'type': 'district', 'value': 'Anson, Tanjong Pagar'},
-                3: {'name': 'District 3', 'type': 'district', 'value': 'Queenstown, Tiong Bahru'},
-                4: {'name': 'District 4', 'type': 'district', 'value': 'Telok Blangah, Harbourfront'},
-                5: {'name': 'District 5', 'type': 'district', 'value': 'Pasir Panjang, Hong Leong Garden, Clementi New Town'},
-                6: {'name': 'District 6', 'type': 'district', 'value': 'High Street, Beach Road (part)'},
-                7: {'name': 'District 7', 'type': 'district', 'value': 'Middle Road, Golden Mile'},
-                8: {'name': 'District 8', 'type': 'district', 'value': 'Little India'},
-                9: {'name': 'District 9', 'type': 'district', 'value': 'Orchard, Cairnhill, River Valley'},
-                10: {'name': 'District 10', 'type': 'district', 'value': 'Ardmore, Bukit Timah, Holland Road, Tanglin'},
-                11: {'name': 'District 11', 'type': 'district', 'value': 'Watten Estate, Novena, Thomson'},
-                12: {'name': 'District 12', 'type': 'district', 'value': 'Balestier, Toa Payoh, Serangoon'},
-                13: {'name': 'District 13', 'type': 'district', 'value': 'Macpherson, Braddell'},
-                14: {'name': 'District 14', 'type': 'district', 'value': 'Geylang, Eunos'},
-                15: {'name': 'District 15', 'type': 'district', 'value': 'Katong, Joo Chiat, Amber Road'},
-                16: {'name': 'District 16', 'type': 'district', 'value': 'Bedok, Upper East Coast, Eastwood, Kew Drive'},
-                17: {'name': 'District 17', 'type': 'district', 'value': 'Loyang, Changi'},
-                18: {'name': 'District 18', 'type': 'district', 'value': 'Tampines, Pasir Ris'},
-                19: {'name': 'District 19', 'type': 'district', 'value': 'Serangoon Garden, Hougang, Punggol'},
-                20: {'name': 'District 20', 'type': 'district', 'value': 'Bishan, Ang Mo Kio'},
-                21: {'name': 'District 21', 'type': 'district', 'value': 'Upper Bukit Timah, Clementi Park, Ulu Pandan'},
-                22: {'name': 'District 22', 'type': 'district', 'value': 'Jurong'},
-                23: {'name': 'District 23', 'type': 'district', 'value': 'Hillview, Dairy Farm, Bukit Panjang, Choa Chu Kang'},
-                24: {'name': 'District 24', 'type': 'district', 'value': 'Lim Chu Kang, Tengah'},
-                25: {'name': 'District 25', 'type': 'district', 'value': 'Kranji, Woodgrove'},
-                26: {'name': 'District 26', 'type': 'district', 'value': 'Upper Thomson, Springleaf'},
-                27: {'name': 'District 27', 'type': 'district', 'value': 'Yishun, Sembawang'},
-                28: {'name': 'District 28', 'type': 'district', 'value': 'Seletar'}
-            }
-            
-            if region_id in region_map:
-                region_data = region_map[region_id]
-                new_region = AgentRegion(
-                    agent_id=current_user['user_id'],
-                    region_name=region_data['name'],
-                    region_type=region_data['type'],
-                    region_value=region_data['value']
-                )
-                db.session.add(new_region)
+        # Convert to integers to ensure type consistency
+        selected_regions = [int(r) for r in selected_regions]
+        
+        # Fetch selected regions from database
+        regions = Region.query.filter(Region.id.in_(selected_regions)).all()
+        
+        # Debug logging
+        print(f"DEBUG: Selected region IDs: {selected_regions}")
+        print(f"DEBUG: Found regions: {[(r.id, r.district, r.location, r.is_active) for r in regions]}")
+        
+        # Check if all regions exist
+        if len(regions) != len(selected_regions):
+            # Get the IDs that were not found
+            found_ids = [r.id for r in regions]
+            missing_ids = [r for r in selected_regions if r not in found_ids]
+            print(f"DEBUG: Missing region IDs: {missing_ids}")
+            return jsonify({
+                'error': f'Invalid region IDs: {missing_ids}. Expected {len(selected_regions)} regions but found {len(regions)}'
+            }), 400
+        
+        if not regions:
+            return jsonify({'error': 'No valid regions found'}), 400
+        
+        # Check for inactive regions
+        inactive_regions = [r for r in regions if not r.is_active]
+        if inactive_regions:
+            return jsonify({
+                'error': f'One or more selected regions are inactive: {[r.location for r in inactive_regions]}'
+            }), 400
+        
+        # All regions are valid and active - add them
+        for region in regions:
+            new_region = AgentRegion(
+                agent_id=current_user['user_id'],
+                region_name=f'District {region.district}',
+                region_type='district',
+                region_value=region.location
+            )
+            db.session.add(new_region)
         
         db.session.commit()
         
@@ -3478,8 +3492,10 @@ def update_agent_regions():
         
     except Exception as e:
         print(f"Error updating agent regions: {e}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
-        return jsonify({'error': 'Failed to update regions'}), 500
+        return jsonify({'error': f'Failed to update regions: {str(e)}'}), 500
 
 @app.route('/api/agent/recent-activity', methods=['GET'])
 @require_auth
@@ -4311,6 +4327,110 @@ def serve_property_image(filename):
         print(f"Error serving file: {e}")
         return jsonify({'error': 'Error serving file'}), 500
 
+
+# Trial system endpoints
+@app.route('/api/trial/check', methods=['GET'])
+@require_auth
+def check_trial_status():
+    """Check if user has trial available or used"""
+    try:
+        current_user = request.user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get or create user profile
+        user_profile = UserProfile.query.filter_by(user_id=user.id).first()
+        if not user_profile:
+            user_profile = UserProfile(user_id=user.id)
+            db.session.add(user_profile)
+            db.session.commit()
+        
+        return jsonify({
+            'trial_used': user_profile.trial_used,
+            'trial_predictions_used': user_profile.trial_predictions_used,
+            'max_trial_predictions': user_profile.max_trial_predictions,
+            'trial_available': not user_profile.trial_used and user_profile.trial_predictions_used < user_profile.max_trial_predictions,
+            'trial_start_date': user_profile.trial_start_date.isoformat() if user_profile.trial_start_date else None,
+            'trial_end_date': user_profile.trial_end_date.isoformat() if user_profile.trial_end_date else None
+        }), 200
+        
+    except Exception as e:
+        print(f"Error checking trial status: {e}")
+        return jsonify({'error': 'Failed to check trial status'}), 500
+
+@app.route('/api/trial/start', methods=['POST'])
+@require_auth
+def start_trial():
+    """Start trial for user"""
+    try:
+        current_user = request.user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get or create user profile
+        user_profile = UserProfile.query.filter_by(user_id=user.id).first()
+        if not user_profile:
+            user_profile = UserProfile(user_id=user.id)
+            db.session.add(user_profile)
+        
+        # Check if trial already used
+        if user_profile.trial_used:
+            return jsonify({'error': 'Trial already used'}), 400
+        
+        # Start trial
+        user_profile.trial_start_date = datetime.utcnow()
+        user_profile.trial_end_date = datetime.utcnow() + timedelta(days=7)  # 7-day trial
+        user_profile.trial_used = True
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Trial started successfully',
+            'trial_start_date': user_profile.trial_start_date.isoformat(),
+            'trial_end_date': user_profile.trial_end_date.isoformat(),
+            'max_predictions': user_profile.max_trial_predictions
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error starting trial: {e}")
+        return jsonify({'error': 'Failed to start trial'}), 500
+
+@app.route('/api/trial/use-prediction', methods=['POST'])
+@require_auth
+def use_trial_prediction():
+    """Use a trial prediction"""
+    try:
+        current_user = request.user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get user profile
+        user_profile = UserProfile.query.filter_by(user_id=user.id).first()
+        if not user_profile:
+            return jsonify({'error': 'User profile not found'}), 404
+        
+        # Check if trial is available
+        if user_profile.trial_predictions_used >= user_profile.max_trial_predictions:
+            return jsonify({'error': 'Trial predictions exhausted'}), 400
+        
+        # Increment trial predictions used
+        user_profile.trial_predictions_used += 1
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Trial prediction used successfully',
+            'predictions_remaining': user_profile.max_trial_predictions - user_profile.trial_predictions_used
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error using trial prediction: {e}")
+        return jsonify({'error': 'Failed to use trial prediction'}), 500
+
 # User preferences and recommendations endpoints
 @app.route('/api/onboarding/save-preferences', methods=['POST'])
 @require_auth
@@ -4949,8 +5069,12 @@ def upload_hero_background():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"hero_bg_{timestamp}_{file.filename}"
         
+        # Ensure directory exists
+        upload_dir = os.path.join('admin', 'hero', 'backgrounds')
+        os.makedirs(upload_dir, exist_ok=True)
+        
         # Save file
-        file_path = os.path.join('admin', 'hero', 'backgrounds', filename)
+        file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         
         # Return the URL path
@@ -4987,8 +5111,12 @@ def upload_hero_video():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"hero_video_{timestamp}_{file.filename}"
         
+        # Ensure directory exists
+        upload_dir = os.path.join('admin', 'hero', 'videos')
+        os.makedirs(upload_dir, exist_ok=True)
+        
         # Save file
-        file_path = os.path.join('admin', 'hero', 'videos', filename)
+        file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         
         # Return the URL path
@@ -5235,7 +5363,7 @@ def get_features_steps():
     """Get all features steps"""
     try:
         result = db.session.execute(text("""
-            SELECT id, step_number, step_title, step_description, step_image
+            SELECT id, step_number, step_title, step_description, step_image, step_video
             FROM features_steps 
             WHERE is_active = true
             ORDER BY step_number
@@ -5248,7 +5376,8 @@ def get_features_steps():
                 'step_number': row.step_number,
                 'step_title': row.step_title,
                 'step_description': row.step_description,
-                'step_image': row.step_image
+                'step_image': row.step_image,
+                'step_video': row.step_video
             })
         
         return jsonify({
@@ -5265,7 +5394,7 @@ def get_features_step(step_id):
     """Get specific features step by ID"""
     try:
         result = db.session.execute(text("""
-            SELECT id, step_number, step_title, step_description, step_image
+            SELECT id, step_number, step_title, step_description, step_image, step_video
             FROM features_steps 
             WHERE id = :step_id AND is_active = true
         """), {'step_id': step_id}).fetchone()
@@ -5280,7 +5409,8 @@ def get_features_step(step_id):
                 'step_number': result.step_number,
                 'step_title': result.step_title,
                 'step_description': result.step_description,
-                'step_image': result.step_image
+                'step_image': result.step_image,
+                'step_video': result.step_video
             }
         }), 200
         
@@ -5305,13 +5435,14 @@ def update_features_step(step_id):
         result = db.session.execute(text("""
             UPDATE features_steps 
             SET step_title = :step_title, step_description = :step_description, 
-                step_image = :step_image, updated_at = CURRENT_TIMESTAMP
+                step_image = :step_image, step_video = :step_video, updated_at = CURRENT_TIMESTAMP
             WHERE id = :step_id AND is_active = true
         """), {
             'step_id': step_id,
             'step_title': data['step_title'],
             'step_description': data['step_description'],
-            'step_image': data.get('step_image')
+            'step_image': data.get('step_image'),
+            'step_video': data.get('step_video')
         })
         
         if result.rowcount == 0:
@@ -5352,14 +5483,15 @@ def create_features_step():
         
         # Create new step
         result = db.session.execute(text("""
-            INSERT INTO features_steps (step_number, step_title, step_description, step_image)
-            VALUES (:step_number, :step_title, :step_description, :step_image)
+            INSERT INTO features_steps (step_number, step_title, step_description, step_image, step_video)
+            VALUES (:step_number, :step_title, :step_description, :step_image, :step_video)
             RETURNING id
         """), {
             'step_number': next_step_number,
             'step_title': data['step_title'],
             'step_description': data['step_description'],
-            'step_image': data.get('step_image', '')
+            'step_image': data.get('step_image', ''),
+            'step_video': data.get('step_video', '')
         })
         
         new_step_id = result.fetchone().id
@@ -5413,43 +5545,59 @@ def delete_features_step(step_id):
 
 @app.route('/api/features/section-title', methods=['GET'])
 def get_features_section_title():
-    """Get features section title"""
+    """Get features section title and tutorial video"""
     try:
-        result = db.session.execute(text("""
-            SELECT section_title FROM features_section 
-            WHERE id = 1
-        """)).fetchone()
+        # Try to get the section, or create a default one if it doesn't exist
+        section = FeaturesSection.query.filter_by(id=1).first()
         
-        section_title = result.section_title if result else 'How it Works'
+        if not section:
+            # Create a default section if it doesn't exist
+            section = FeaturesSection(
+                id=1,
+                section_title='How it Works',
+                tutorial_video_url=None
+            )
+            db.session.add(section)
+            db.session.commit()
         
         return jsonify({
             'success': True,
-            'section_title': section_title
+            'section_title': section.section_title,
+            'tutorial_video_url': section.tutorial_video_url
         }), 200
         
     except Exception as e:
         print(f"Error getting features section title: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to get section title'}), 500
 
 @app.route('/api/features/section-title', methods=['PUT'])
 @require_auth
 def update_features_section_title():
-    """Update features section title"""
+    """Update features section title and tutorial video"""
     try:
         data = request.get_json()
         
         if 'section_title' not in data:
             return jsonify({'error': 'Missing section_title field'}), 400
         
-        # Update or insert section title
-        result = db.session.execute(text("""
-            INSERT INTO features_section (id, section_title, updated_at)
-            VALUES (1, :section_title, CURRENT_TIMESTAMP)
-            ON CONFLICT (id) 
-            DO UPDATE SET 
-                section_title = :section_title,
-                updated_at = CURRENT_TIMESTAMP
-        """), {'section_title': data['section_title']})
+        # Get or create the section
+        section = FeaturesSection.query.filter_by(id=1).first()
+        
+        if section:
+            # Update existing section
+            section.section_title = data['section_title']
+            if 'tutorial_video_url' in data:
+                section.tutorial_video_url = data['tutorial_video_url'] or None
+        else:
+            # Create new section
+            section = FeaturesSection(
+                id=1,
+                section_title=data['section_title'],
+                tutorial_video_url=data.get('tutorial_video_url')
+            )
+            db.session.add(section)
         
         db.session.commit()
         
@@ -5460,8 +5608,109 @@ def update_features_section_title():
         
     except Exception as e:
         print(f"Error updating features section title: {e}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
         return jsonify({'error': 'Failed to update section title'}), 500
+
+@app.route('/api/features/upload-video', methods=['POST'])
+@require_auth
+def upload_features_video():
+    """Upload features step tutorial video"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check file type
+        allowed_extensions = {'mp4', 'webm', 'ogg', 'mov'}
+        if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            return jsonify({'error': 'Invalid file type. Allowed: MP4, WEBM, OGG, MOV'}), 400
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"features_video_{timestamp}_{file.filename}"
+        
+        # Ensure directory exists
+        upload_dir = os.path.join('admin', 'features', 'videos')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Save file
+        file_path = os.path.join(upload_dir, filename)
+        file.save(file_path)
+        
+        # Return the URL path
+        file_url = f"/admin/features/videos/{filename}"
+        
+        return jsonify({
+            'success': True,
+            'file_url': file_url,
+            'filename': filename
+        }), 200
+        
+    except Exception as e:
+        print(f"Error uploading features video: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to upload video: {str(e)}'}), 500
+
+@app.route('/api/features/tutorial-video', methods=['PUT'])
+@require_auth
+def update_tutorial_video():
+    """Update tutorial video URL for the section"""
+    try:
+        data = request.get_json()
+        
+        if 'tutorial_video_url' not in data:
+            return jsonify({'error': 'Missing tutorial_video_url field'}), 400
+        
+        # Update or insert tutorial video URL
+        result = db.session.execute(text("""
+            INSERT INTO features_section (id, tutorial_video_url, updated_at)
+            VALUES (1, :tutorial_video_url, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) 
+            DO UPDATE SET 
+                tutorial_video_url = :tutorial_video_url,
+                updated_at = CURRENT_TIMESTAMP
+        """), {'tutorial_video_url': data['tutorial_video_url']})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Tutorial video URL updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating tutorial video: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update tutorial video URL'}), 500
+
+@app.route('/admin/features/videos/<filename>')
+def serve_features_video(filename):
+    """Serve features tutorial videos"""
+    try:
+        upload_dir = os.path.join(os.getcwd(), 'admin', 'features', 'videos')
+        file_path = os.path.join(upload_dir, filename)
+        
+        if not os.path.exists(file_path):
+            print(f"File not found: {file_path}")
+            return jsonify({'error': 'File not found'}), 404
+        
+        response = send_from_directory(upload_dir, filename)
+        # Add CORS headers
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
+    except Exception as e:
+        print(f"Error serving features video: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Error serving file'}), 500
 
 # Team API Endpoints
 
@@ -5538,7 +5787,7 @@ def get_team_members():
             # Convert relative image URL to full URL
             image_url = member.image_url
             if image_url and not image_url.startswith('http'):
-                image_url = f"http://localhost:5000{image_url}"
+                image_url = f"http://localhost:5001{image_url}"
             
             members_list.append({
                 'id': member.id,
@@ -5571,7 +5820,7 @@ def get_team_member(member_id):
         # Convert relative image URL to full URL
         image_url = member.image_url
         if image_url and not image_url.startswith('http'):
-            image_url = f"http://localhost:5000{image_url}"
+            image_url = f"http://localhost:5001{image_url}"
         
         return jsonify({
             'success': True,
@@ -6064,6 +6313,65 @@ def get_verified_reviews():
 
 # ==================== DATABASE SEEDING ====================
 
+def seed_regions():
+    """Seed the database with Singapore postal districts"""
+    
+    try:
+        # Check if regions already exist
+        if Region.query.count() > 0:
+            print("Regions already exist, skipping seeding")
+            return
+        
+        print("Seeding regions...")
+        
+        # Regions data
+        regions_data = [
+            ('01', '01, 02, 03, 04, 05, 06', 'Raffles Place, Cecil, Marina, People\'s Park'),
+            ('02', '07, 08', 'Anson, Tanjong Pagar'),
+            ('03', '14, 15, 16', 'Queenstown, Tiong Bahru'),
+            ('04', '09, 10', 'Telok Blangah, Harbourfront'),
+            ('05', '11, 12, 13', 'Pasir Panjang, Hong Leong Garden, Clementi New Town'),
+            ('06', '17', 'High Street, Beach Road (part)'),
+            ('07', '18, 19', 'Middle Road, Golden Mile'),
+            ('08', '20, 21', 'Little India'),
+            ('09', '22, 23', 'Orchard, Cairnhill, River Valley'),
+            ('10', '24, 25, 26, 27', 'Ardmore, Bukit Timah, Holland Road, Tanglin'),
+            ('11', '28, 29, 30', 'Watten Estate, Novena, Thomson'),
+            ('12', '31, 32, 33', 'Balestier, Toa Payoh, Serangoon'),
+            ('13', '34, 35, 36, 37', 'Macpherson, Braddell'),
+            ('14', '38, 39, 40, 41', 'Geylang, Eunos'),
+            ('15', '42, 43, 44, 45', 'Katong, Joo Chiat, Amber Road'),
+            ('16', '46, 47, 48', 'Bedok, Upper East Coast, Eastwood, Kew Drive'),
+            ('17', '49, 50, 81', 'Loyang, Changi'),
+            ('18', '51, 52', 'Tampines, Pasir Ris'),
+            ('19', '53, 54, 55, 82', 'Serangoon Garden, Hougang, Punggol'),
+            ('20', '56, 57', 'Bishan, Ang Mo Kio'),
+            ('21', '58, 59', 'Upper Bukit Timah, Clementi Park, Ulu Pandan'),
+            ('22', '60, 61, 62, 63, 64', 'Jurong'),
+            ('23', '65, 66, 67, 68', 'Hillview, Dairy Farm, Bukit Panjang, Choa Chu Kang'),
+            ('24', '69, 70, 71', 'Lim Chu Kang, Tengah'),
+            ('25', '72, 73', 'Kranji, Woodgrove'),
+            ('26', '77, 78', 'Upper Thomson, Springleaf'),
+            ('27', '75, 76', 'Yishun, Sembawang'),
+            ('28', '79, 80', 'Seletar'),
+        ]
+        
+        # Insert regions
+        for district, sector, location in regions_data:
+            region = Region(
+                district=district,
+                sector=sector,
+                location=location,
+                is_active=True
+            )
+            db.session.add(region)
+        
+        db.session.commit()
+        print(f"✅ Successfully seeded {Region.query.count()} regions!")
+        
+    except Exception as e:
+        print(f"❌ Error seeding regions: {e}")
+
 def seed_subscription_plans():
     """Seed the database with initial subscription plans and important features"""
     
@@ -6194,6 +6502,32 @@ def seed_subscription_plans():
     except Exception as e:
         db.session.rollback()
         print(f"❌ Error seeding database: {e}")
+
+def seed_features_section():
+    """Seed the features_section table with initial data"""
+    
+    try:
+        # Check if data already exists
+        if FeaturesSection.query.count() > 0:
+            print("Features section already exists, skipping seeding")
+            return
+        
+        print("Seeding features section...")
+        
+        # Create default features section
+        features_section = FeaturesSection(
+            id=1,
+            section_title='How it Works',
+            tutorial_video_url=None
+        )
+        db.session.add(features_section)
+        db.session.commit()
+        
+        print("✅ Successfully seeded features section!")
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error seeding features section: {e}")
 
 # Admin endpoint to manually seed data
 @app.route('/api/admin/seed-subscription-plans', methods=['POST'])
@@ -6715,8 +7049,192 @@ def get_user_predictions(user_id):
         print(f"Error in get_user_predictions endpoint: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+# ===================== Admin Regions Management Endpoints =====================
+
+@app.route('/api/admin/regions', methods=['GET'])
+@require_auth
+def get_all_regions():
+    """Get all regions - accessible to both admin and agents"""
+    try:
+        current_user = request.user
+        
+        # Get all regions
+        regions = Region.query.order_by(Region.district).all()
+        
+        regions_data = []
+        for region in regions:
+            regions_data.append({
+                'id': region.id,
+                'district': region.district,
+                'sector': region.sector,
+                'location': region.location,
+                'is_active': region.is_active,
+                'created_at': region.created_at.isoformat() if region.created_at else None,
+                'updated_at': region.updated_at.isoformat() if region.updated_at else None
+            })
+        
+        return jsonify({'regions': regions_data}), 200
+        
+    except Exception as e:
+        print(f"Error getting regions: {e}")
+        return jsonify({'error': 'Failed to get regions'}), 500
+
+@app.route('/api/admin/regions/<int:region_id>', methods=['GET'])
+@require_auth
+def get_region(region_id):
+    """Get a specific region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        region = Region.query.get(region_id)
+        if not region:
+            return jsonify({'error': 'Region not found'}), 404
+        
+        return jsonify({
+            'id': region.id,
+            'district': region.district,
+            'sector': region.sector,
+            'location': region.location,
+            'is_active': region.is_active
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting region: {e}")
+        return jsonify({'error': 'Failed to get region'}), 500
+
+@app.route('/api/admin/regions', methods=['POST'])
+@require_auth
+def create_region():
+    """Create a new region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        data = request.get_json()
+        district = data.get('district')
+        sector = data.get('sector')
+        location = data.get('location')
+        
+        if not district or not sector or not location:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Create new region
+        new_region = Region(
+            district=district,
+            sector=sector,
+            location=location,
+            is_active=True
+        )
+        db.session.add(new_region)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Region created successfully',
+            'region': {
+                'id': new_region.id,
+                'district': new_region.district,
+                'sector': new_region.sector,
+                'location': new_region.location,
+                'is_active': new_region.is_active
+            }
+        }), 201
+        
+    except Exception as e:
+        print(f"Error creating region: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create region'}), 500
+
+@app.route('/api/admin/regions/<int:region_id>', methods=['PUT'])
+@require_auth
+def update_region(region_id):
+    """Update a region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        region = Region.query.get(region_id)
+        if not region:
+            return jsonify({'error': 'Region not found'}), 404
+        
+        data = request.get_json()
+        
+        if 'district' in data:
+            region.district = data['district']
+        if 'sector' in data:
+            region.sector = data['sector']
+        if 'location' in data:
+            region.location = data['location']
+        if 'is_active' in data:
+            region.is_active = data['is_active']
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Region updated successfully',
+            'region': {
+                'id': region.id,
+                'district': region.district,
+                'sector': region.sector,
+                'location': region.location,
+                'is_active': region.is_active
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating region: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update region'}), 500
+
+@app.route('/api/admin/regions/<int:region_id>', methods=['DELETE'])
+@require_auth
+def delete_region(region_id):
+    """Delete a region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        region = Region.query.get(region_id)
+        if not region:
+            return jsonify({'error': 'Region not found'}), 404
+        
+        # Check if any agents are assigned to this region
+        region_value = f"District {region.district}"
+        agent_regions_count = AgentRegion.query.filter_by(region_value=region.location).count()
+        
+        if agent_regions_count > 0:
+            return jsonify({'error': f'Cannot delete region. {agent_regions_count} agent(s) assigned to this region.'}), 400
+        
+        db.session.delete(region)
+        db.session.commit()
+        
+        return jsonify({'message': 'Region deleted successfully'}), 200
+        
+    except Exception as e:
+        print(f"Error deleting region: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete region'}), 500
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Create tables if they don't exist
+        seed_regions()  # Seed regions data
         seed_subscription_plans()  # Seed initial data
-    app.run(debug=True, host='0.0.0.0', port=5000)
+        seed_features_section()  # Seed features section
+    app.run(debug=True, host='0.0.0.0', port=5001)

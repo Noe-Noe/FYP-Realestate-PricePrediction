@@ -4,7 +4,14 @@
   background: var(--bg-primary);
 }
 
-
+.features-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.125rem;
+  color: #717171;
+  font-family: 'Poppins', sans-serif;
+}
 
 .features-grid {
   display: grid;
@@ -51,11 +58,43 @@
   margin: 0 auto;
 }
 
+/* Tutorial Video Section */
+.features-tutorial-section {
+  max-width: 1200px;
+  margin: 3rem auto 0;
+  padding: 0 2rem;
+}
+
+.features-tutorial-video-container {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #d6d9e3;
+}
+
+.features-tutorial-video {
+  width: 100%;
+  max-width: 800px;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  margin: 0 auto;
+}
+
 /* Responsive Design */
 @media (max-width: 900px) {
   .features-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
+  }
+  
+  .features-tutorial-section {
+    padding: 0 1rem;
+  }
+  
+  .features-tutorial-video-container {
+    padding: 1.5rem;
   }
 }
 
@@ -75,5 +114,9 @@
   
   .feature h3 {
     font-size: 1.25rem;
+  }
+  
+  .features-tutorial-video-container {
+    padding: 1rem;
   }
 }

@@ -100,7 +100,7 @@ export FLASK_ENV=development
 flask run
 ```
 
-Server runs at http://localhost:5000.
+Server runs at http://localhost:5001.
 
 8) Common issues on macOS
 
@@ -124,5 +124,4 @@ psql -U postgres -d fyp_app -c "\\dt"
 
 ---
 If you run into setup issues on macOS, share the exact error output and your chip type (Apple Silicon vs Intel) so we can tailor the fix.
-
 

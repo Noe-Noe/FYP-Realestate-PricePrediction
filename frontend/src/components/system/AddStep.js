@@ -3,7 +3,7 @@ import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import './AddStep.css';
-import api from '../../services/api';
+import api, { BACKEND_ORIGIN } from '../../services/api';
 
 const AddStep = () => {
   const [activeTab, setActiveTab] = useState('content');
@@ -12,7 +12,10 @@ const AddStep = () => {
     title: '',
     description: '',
     image: null,
-    imagePreview: null
+    imagePreview: null,
+    video: null,
+    videoUrl: null,
+    videoPreview: null
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -52,6 +55,64 @@ const AddStep = () => {
     }));
   };
 
+  const handleVideoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData(prev => ({
+        ...prev,
+        video: file
+      }));
+
+      // Create preview URL
+      const videoUrl = URL.createObjectURL(file);
+      setFormData(prev => ({
+        ...prev,
+        videoPreview: videoUrl
+      }));
+    }
+  };
+
+  const handleVideoUrlChange = (e) => {
+    const url = e.target.value;
+    // Prefix with backend URL if it's a relative path
+    const previewUrl = url && url.startsWith('/') && !url.startsWith('//')
+      ? `${BACKEND_ORIGIN}${url}` : url;
+    setFormData(prev => ({
+      ...prev,
+      videoUrl: url,
+      videoPreview: previewUrl
+    }));
+  };
+
+  const handleUploadVideo = async () => {
+    if (!formData.video) {
+      alert('Please select a video file to upload');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const response = await api.features.uploadVideo(formData.video);
+      if (response.success) {
+        // Prefix with backend URL if it's a relative path
+        const fullVideoUrl = response.file_url.startsWith('/') && !response.file_url.startsWith('//')
+          ? `${BACKEND_ORIGIN}${response.file_url}` : response.file_url;
+        setFormData(prev => ({
+          ...prev,
+          videoUrl: response.file_url,
+          videoPreview: fullVideoUrl
+        }));
+        setMessage('Video uploaded successfully!');
+        setTimeout(() => setMessage(''), 2000);
+      }
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      setMessage(`Error uploading video: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveStep = async () => {
     try {
       setSaving(true);
@@ -66,7 +127,8 @@ const AddStep = () => {
       const stepData = {
         step_title: formData.title,
         step_description: formData.description,
-        step_image: formData.imagePreview || ''
+        step_image: formData.imagePreview || '',
+        step_video: formData.videoUrl || formData.videoPreview || ''
       };
 
       const response = await api.features.createStep(stepData);
@@ -223,6 +285,68 @@ const AddStep = () => {
                       <div className="add-step-preview-fallback" style={{ display: 'none' }}>
                         <span className="add-step-emoji-preview">{formData.imagePreview}</span>
                       </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="add-step-form-group">
+              <label className="add-step-form-label">Step Video</label>
+              <div className="add-step-image-options">
+                {/* Video URL Input */}
+                <div className="add-step-form-group">
+                  <label htmlFor="videoUrl" className="add-step-form-label">Video URL</label>
+                  <input
+                    type="text"
+                    id="videoUrl"
+                    name="videoUrl"
+                    value={formData.videoUrl || ''}
+                    onChange={handleVideoUrlChange}
+                    className="add-step-form-input"
+                    placeholder="Enter video URL (https://...)"
+                  />
+                </div>
+
+                {/* File Upload */}
+                <div className="add-step-form-group">
+                  <label htmlFor="video" className="add-step-form-label">Or Upload Video File</label>
+                  <div className="add-step-image-upload-section">
+                    <input
+                      type="file"
+                      id="video"
+                      name="video"
+                      onChange={handleVideoUpload}
+                      className="add-step-file-input"
+                      accept="video/*"
+                    />
+                    <label htmlFor="video" className="add-step-upload-btn">
+                      Choose Video File
+                    </label>
+                    {formData.video && (
+                      <button
+                        type="button"
+                        onClick={handleUploadVideo}
+                        className="add-step-upload-action-btn"
+                        disabled={saving}
+                      >
+                        {saving ? 'Uploading...' : 'Upload Video'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Video Preview */}
+                {formData.videoPreview && (
+                  <div className="add-step-image-preview">
+                    <label className="add-step-form-label">Preview</label>
+                    <div className="add-step-preview-container">
+                      <video
+                        src={formData.videoPreview}
+                        controls
+                        className="add-step-preview-video"
+                        style={{ maxWidth: '100%', maxHeight: '300px' }}
+                      />
                     </div>
                   </div>
                 )}

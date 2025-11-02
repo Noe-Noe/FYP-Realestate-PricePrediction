@@ -11,24 +11,69 @@
   background: #181f28;
 }
 
+/* Section spacing and layout */
+.explore {
+  padding: 4rem 1rem;
+  background: #fafafa;
+}
+
+.section-title {
+  margin-bottom: 1rem;
+}
+
+.explore-header {
+  margin-bottom: 2rem;
+}
+
+.explore-types {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+
+.type-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 25px;
+  font-weight: 600;
+  color: #18181b;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  font-family: 'Poppins', sans-serif;
+}
+
 .how-grid {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem 2rem;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+.how-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.125rem;
+  color: #717171;
+  font-family: 'Poppins', sans-serif;
 }
 
 .how-card {
   background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(24,26,32,0.07);
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(24,26,32,0.08);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
-  height: 450px;
+  height: 500px;
+  border: 1px solid #e5e7eb;
 }
 
 .how-card:hover {
@@ -37,13 +82,14 @@
 }
 
 .how-card-image {
-  height: 200px;
+  height: 280px;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  border-radius: 12px 12px 0 0;
+  border-radius: 16px 16px 0 0;
   position: relative;
   overflow: hidden;
+  background-color: #f3f4f6;
 }
 
 .how-card-image::after {
@@ -67,11 +113,12 @@
 }
 
 .how-card-body h3 { 
-  margin: 0.25rem 0; 
-  font-size: 1rem; 
+  margin: 0.25rem 0 0.5rem 0; 
+  font-size: 1.1rem; 
   color: #181a20; 
   font-family: 'Poppins', sans-serif;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .how-card-body .muted { 
@@ -205,11 +252,48 @@
   color: #fafafa;
 }
 
+.btn-primary {
+  background: #24c486;
+  color: #ffffff;
+  width: 100%;
+  text-align: center;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: #1ea876;
+  transform: translateY(-1px);
+}
+
 /* Responsive Design */
+@media (max-width: 1024px) {
+  .how-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    padding: 1.5rem 1rem 2rem;
+  }
+  
+  .how-card {
+    height: 480px;
+  }
+  
+  .how-card-image {
+    height: 250px;
+  }
+}
+
 @media (max-width: 900px) {
   .how-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
     padding: 1rem 1rem 2rem;
+  }
+  
+  .how-card {
+    height: 500px;
   }
   
   .details-card {
