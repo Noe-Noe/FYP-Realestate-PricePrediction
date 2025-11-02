@@ -90,7 +90,6 @@
 .feedback-section {
   background: white;
   border-radius: 12px;
-  height: 420px;
   padding: 2rem;
   margin-bottom: 2rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -136,18 +135,26 @@
 /* Feedback Form */
 .feedback-form {
   position: relative;
+  width: 100%;
+}
+
+.feedback-form::after {
+  content: "";
+  display: table;
+  clear: both;
 }
 
 .feedback-textarea {
-  width: 90%;
+  width: 100%;
   padding: 1rem;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   font-size: 0.875rem;
   font-family: inherit;
   resize: vertical;
-  min-height: 120px;
+  min-height: 150px;
   transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 
 .feedback-textarea:focus {
@@ -157,11 +164,11 @@
 }
 
 .feedback-char-count {
-  position: absolute;
-  bottom: 4rem;
-  right: 1rem;
+  text-align: right;
   font-size: 0.75rem;
   color: #6b7280;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .feedback-submit-btn {
@@ -173,13 +180,250 @@
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
+  margin-top: 1.5rem;
   float: right;
-  margin-top: 1rem;
 }
 
 .feedback-submit-btn:hover {
   background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.2);
+}
+
+.feedback-submit-btn:active {
+  transform: translateY(0);
+}
+
+/* Feedback Form Elements */
+.feedback-form-group {
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.feedback-form-group:last-of-type {
+  margin-bottom: 1.5rem;
+}
+
+.feedback-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.875rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+.feedback-select,
+.feedback-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  background-color: white;
+  box-sizing: border-box;
+}
+
+.feedback-select:focus,
+.feedback-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.feedback-select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+}
+
+.feedback-feedback-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  border-radius: 50%;
+  background: #f3f4f6;
+}
+
+.feedback-status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+.feedback-status-new {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.feedback-status-progress {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.feedback-status-resolved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.feedback-status-closed {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.feedback-status-responded {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.feedback-status-progress {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Review Summary Section - Overall Rating Display */
+.review-summary-section {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.review-summary-container {
+  display: flex;
+  gap: 3rem;
+  align-items: flex-start;
+  margin-top: 1.5rem;
+}
+
+.review-overall-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 200px;
+}
+
+.review-rating-number {
+  font-size: 4rem;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+.review-stars-display {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.5rem;
+  justify-content: center;
+}
+
+.review-star-full {
+  color: #fbbf24;
+  font-size: 1.75rem;
+}
+
+.review-star-half {
+  color: #fbbf24;
+  font-size: 1.75rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.review-star-half::after {
+  content: '☆';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  color: #d1d5db;
+  transform: translateX(-50%);
+}
+
+.review-star-empty {
+  color: #d1d5db;
+  font-size: 1.75rem;
+}
+
+.review-total-count {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-family: 'Poppins', sans-serif;
+}
+
+.review-star-distribution {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 300px;
+}
+
+.review-distribution-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.review-distribution-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 50px;
+  font-size: 0.875rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+.review-distribution-star-count {
+  font-weight: 600;
+  color: #111827;
+}
+
+.review-distribution-star-icon {
+  color: #fbbf24;
+  font-size: 1rem;
+}
+
+.review-distribution-bar-container {
+  flex: 1;
+  height: 24px;
+  background: #f3f4f6;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.review-distribution-bar {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 12px;
+  transition: width 0.3s ease;
+  min-width: 2px;
+}
+
+.review-distribution-count,
+.review-distribution-percentage {
+  min-width: 45px;
+  text-align: right;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
 }
 
 /* Reviews Section */
@@ -229,6 +473,9 @@
 
 .feedback-reviewer-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .feedback-reviewer-name {
@@ -241,6 +488,12 @@
 .feedback-review-time {
   font-size: 0.75rem;
   color: #6b7280;
+}
+
+.feedback-reviewer-info .feedback-status-badge {
+  display: inline-block;
+  margin-top: 0.25rem;
+  margin-left: 0;
 }
 
 .feedback-review-rating {
@@ -391,6 +644,23 @@
   .feedback-star-btn {
     min-width: 60px;
     padding: 0.5rem 0.75rem;
+  }
+
+  .review-summary-container {
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .review-overall-rating {
+    width: 100%;
+  }
+
+  .review-star-distribution {
+    width: 100%;
+  }
+
+  .review-summary-section {
+    padding: 1.5rem;
   }
 }
 

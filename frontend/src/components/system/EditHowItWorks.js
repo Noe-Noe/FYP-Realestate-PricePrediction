@@ -3,7 +3,7 @@ import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import './EditHowItWorks.css';
-import api from '../../services/api';
+import api, { BACKEND_ORIGIN } from '../../services/api';
 
 const EditHowItWorks = () => {
   const [activeTab, setActiveTab] = useState('content');
@@ -12,6 +12,10 @@ const EditHowItWorks = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [tutorialVideoUrl, setTutorialVideoUrl] = useState('');
+  const [tutorialVideoFile, setTutorialVideoFile] = useState(null);
+  const [tutorialVideoPreview, setTutorialVideoPreview] = useState(null);
+  const [isFileUploaded, setIsFileUploaded] = useState(false);
 
   // Fetch features steps and section title from API
   useEffect(() => {
@@ -26,15 +30,27 @@ const EditHowItWorks = () => {
         ]);
         
         if (stepsResponse.success) {
-          setSteps(stepsResponse.steps);
+          setSteps(stepsResponse.steps || []);
+        } else {
+          setMessage('Failed to load steps: ' + (stepsResponse.error || 'Unknown error'));
         }
         
         if (titleResponse.success) {
           setSectionTitle(titleResponse.section_title);
+          const videoUrl = titleResponse.tutorial_video_url || '';
+          setTutorialVideoUrl(videoUrl);
+          // Prefix with backend URL if it's a relative path
+          const previewUrl = videoUrl && videoUrl.startsWith('/') && !videoUrl.startsWith('//') 
+            ? `${BACKEND_ORIGIN}${videoUrl}` : videoUrl;
+          setTutorialVideoPreview(previewUrl);
+          // If there's already a video URL, mark it as uploaded
+          setIsFileUploaded(!!videoUrl);
+        } else {
+          setMessage('Failed to load section title: ' + (titleResponse.error || 'Unknown error'));
         }
       } catch (error) {
         console.error('Error fetching features data:', error);
-        setMessage('Error loading data');
+        setMessage('Error loading data: ' + error.message);
       } finally {
         setLoading(false);
       }
@@ -90,18 +106,91 @@ const EditHowItWorks = () => {
     window.location.href = '/dashboard/add-step';
   };
 
+  const handleTutorialVideoUrlChange = (e) => {
+    const url = e.target.value;
+    setTutorialVideoUrl(url);
+    // Prefix with backend URL if it's a relative path
+    const previewUrl = url && url.startsWith('/') && !url.startsWith('//') 
+      ? `${BACKEND_ORIGIN}${url}` : url;
+    setTutorialVideoPreview(previewUrl);
+    // Clear file selection when user enters URL
+    if (url) {
+      setTutorialVideoFile(null);
+    }
+    // If URL is provided, it's already "uploaded" (it's a URL)
+    setIsFileUploaded(!!url);
+  };
+
+  const handleTutorialVideoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setTutorialVideoFile(file);
+      const videoUrl = URL.createObjectURL(file);
+      setTutorialVideoPreview(videoUrl);
+      setIsFileUploaded(false); // Reset upload status when new file is selected
+    }
+  };
+
+  const handleUploadTutorialVideo = async () => {
+    if (!tutorialVideoFile) {
+      alert('Please select a video file to upload');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const response = await api.features.uploadVideo(tutorialVideoFile);
+      if (response.success) {
+        setTutorialVideoUrl(response.file_url);
+        // Prefix with backend URL if it's a relative path
+        const previewUrl = response.file_url.startsWith('/') && !response.file_url.startsWith('//') 
+          ? `${BACKEND_ORIGIN}${response.file_url}` : response.file_url;
+        setTutorialVideoPreview(previewUrl);
+        setIsFileUploaded(true); // Mark as uploaded
+        setMessage('Tutorial video uploaded successfully!');
+        setTimeout(() => setMessage(''), 2000);
+      }
+    } catch (error) {
+      console.error('Error uploading tutorial video:', error);
+      setMessage(`Error uploading video: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveChanges = async () => {
     try {
       setSaving(true);
       
-      // Save section title
-      const titleResponse = await api.features.updateSectionTitle(sectionTitle);
+      let finalVideoUrl = tutorialVideoUrl;
+      
+      // If user selected a file but hasn't uploaded it yet, upload it first
+      if (tutorialVideoFile && !isFileUploaded) {
+        try {
+          const uploadResponse = await api.features.uploadVideo(tutorialVideoFile);
+          if (uploadResponse.success) {
+            finalVideoUrl = uploadResponse.file_url;
+          } else {
+            setMessage('Error uploading video file');
+            return;
+          }
+        } catch (uploadError) {
+          console.error('Error uploading video:', uploadError);
+          setMessage('Error uploading video file: ' + uploadError.message);
+          return;
+        }
+      }
+      
+      // Save section title with tutorial video URL
+      const titleResponse = await api.features.updateSectionTitle(sectionTitle, finalVideoUrl);
       
       if (titleResponse.success) {
         setMessage('How It Works section updated successfully!');
         
-        // Clear message after 3 seconds
-        setTimeout(() => setMessage(''), 3000);
+        // Refresh the page to show updated content
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       } else {
         setMessage('Error updating section title');
       }
@@ -202,6 +291,16 @@ const EditHowItWorks = () => {
                         {step.step_image}
                       </span>
                     </div>
+                    {step.step_video && (
+                      <div className="edit-how-it-works-step-video">
+                        <video
+                          src={step.step_video.startsWith('/') && !step.step_video.startsWith('//') ? 
+                            `${BACKEND_ORIGIN}${step.step_video}` : step.step_video}
+                          controls
+                          style={{ width: '100%', maxHeight: '150px' }}
+                        />
+                      </div>
+                    )}
                     <div className="edit-how-it-works-step-content">
                       <h3 className="edit-how-it-works-step-title">{step.step_title}</h3>
                       <p className="edit-how-it-works-step-description">{step.step_description}</p>
@@ -234,6 +333,71 @@ const EditHowItWorks = () => {
               >
                 Add Step
               </button>
+            </div>
+
+            {/* Tutorial Video Section */}
+            <div className="edit-how-it-works-tutorial-video-section">
+              <h2 className="edit-how-it-works-tutorial-video-heading">Tutorial Video</h2>
+              <p className="edit-how-it-works-tutorial-video-description">
+                Upload a tutorial video that explains how to use the website (optional). You can either provide a video URL or upload a video file from your computer.
+              </p>
+              
+              <div className="edit-how-it-works-tutorial-video-options">
+                {/* Video URL Input */}
+                <div className="edit-how-it-works-tutorial-video-form-group">
+                  <label htmlFor="tutorialVideoUrl" className="edit-how-it-works-tutorial-video-label">Video URL</label>
+                  <input
+                    type="text"
+                    id="tutorialVideoUrl"
+                    value={tutorialVideoUrl}
+                    onChange={handleTutorialVideoUrlChange}
+                    className="edit-how-it-works-tutorial-video-input"
+                    placeholder="Enter video URL (e.g., YouTube embed URL or direct video link)"
+                  />
+                </div>
+
+                {/* File Upload */}
+                <div className="edit-how-it-works-tutorial-video-form-group">
+                  <label htmlFor="tutorialVideoFile" className="edit-how-it-works-tutorial-video-label">Or Upload Video File</label>
+                  <div className="edit-how-it-works-tutorial-video-upload-section">
+                    <input
+                      type="file"
+                      id="tutorialVideoFile"
+                      onChange={handleTutorialVideoUpload}
+                      className="edit-how-it-works-tutorial-video-file-input"
+                      accept="video/*"
+                    />
+                    <label htmlFor="tutorialVideoFile" className="edit-how-it-works-tutorial-video-upload-btn">
+                      Choose Video File
+                    </label>
+                    {tutorialVideoFile && (
+                      <button
+                        type="button"
+                        onClick={handleUploadTutorialVideo}
+                        className="edit-how-it-works-tutorial-video-upload-action-btn"
+                        disabled={saving}
+                      >
+                        {saving ? 'Uploading...' : 'Upload Video'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Video Preview */}
+                {tutorialVideoPreview && (
+                  <div className="edit-how-it-works-tutorial-video-preview">
+                    <label className="edit-how-it-works-tutorial-video-label">Preview</label>
+                    <div className="edit-how-it-works-tutorial-video-preview-container">
+                      <video
+                        src={tutorialVideoPreview}
+                        controls
+                        className="edit-how-it-works-tutorial-video-preview-video"
+                        style={{ maxWidth: '100%', maxHeight: '400px' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Action Buttons */}

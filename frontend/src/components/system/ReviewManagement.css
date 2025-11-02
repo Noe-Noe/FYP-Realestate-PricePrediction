@@ -1,0 +1,602 @@
+/* ReviewManagement Component Styles */
+
+.review-management-loading,
+.review-management-error {
+  text-align: center;
+  padding: 2rem;
+  background: white;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.review-management-error {
+  color: #dc2626;
+  background: #fee;
+  border: 1px solid #fcc;
+}
+
+/* Review Statistics Section */
+.review-management-stats-section {
+  margin-bottom: 1.5rem;
+  width: 100%;
+}
+
+.review-management-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.review-management-stat-card {
+  background-color: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.review-management-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.review-management-stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.review-management-stat-label {
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.review-management-stat-card.stat-green .review-management-stat-value {
+  color: #16a34a;
+}
+
+.review-management-stat-card.stat-blue .review-management-stat-value {
+  color: #2563eb;
+}
+
+.review-management-stat-card.stat-yellow .review-management-stat-value {
+  color: #ca8a04;
+}
+
+.review-management-stat-card.stat-orange .review-management-stat-value {
+  color: #ea580c;
+}
+
+.review-management-stat-card.stat-red .review-management-stat-value {
+  color: #dc2626;
+}
+
+/* Search and Filter Section */
+.review-management-filters-section {
+  background-color: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.review-management-search-container {
+  flex: 1;
+  position: relative;
+}
+
+.review-management-search-input {
+  width: 100%;
+  padding: 0.75rem 2.5rem 0.75rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.review-management-search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.review-management-search-icon {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+}
+
+.review-management-filters {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.review-management-filter-select {
+  padding: 0.75rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.review-management-filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Table Section */
+.review-management-table-section {
+  background-color: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.review-management-table-container {
+  overflow-x: auto;
+}
+
+.review-management-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.review-management-table thead {
+  background-color: #f9fafb;
+}
+
+.review-management-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.review-management-table th:nth-child(5),
+.review-management-table th:nth-child(6) {
+  text-align: center;
+}
+
+.review-management-table th:nth-child(5) {
+  min-width: 140px;
+  width: 140px;
+  background-color: #f9fafb;
+}
+
+.review-management-table th:nth-child(6) {
+  min-width: 120px;
+  width: 120px;
+  background-color: #f9fafb;
+}
+
+.review-management-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.875rem;
+  color: #374151;
+  vertical-align: middle;
+}
+
+.review-management-table td:nth-child(5),
+.review-management-table td:nth-child(6) {
+  text-align: center;
+  padding: 1rem;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.review-management-table td:nth-child(5) {
+  min-width: 140px;
+  width: 140px;
+  max-width: 140px;
+  position: relative;
+}
+
+.review-management-table td:nth-child(6) {
+  min-width: 120px;
+  width: 120px;
+  max-width: 120px;
+  position: relative;
+  background-color: #ffffff;
+}
+
+.review-management-review-row:hover {
+  background-color: #f9fafb;
+}
+
+.review-management-user-name {
+  min-width: 150px;
+}
+
+.review-management-user-display-name {
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.review-management-user-email {
+  font-size: 0.813rem;
+  color: #6b7280;
+}
+
+.review-management-review-text {
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.review-management-review-date {
+  white-space: nowrap;
+}
+
+.review-management-rating {
+  min-width: 120px;
+}
+
+.review-management-stars-container {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.review-management-stars-container .star-filled {
+  color: #fbbf24;
+  font-size: 1rem;
+}
+
+.review-management-stars-container .star-empty {
+  color: #d1d5db;
+  font-size: 1rem;
+}
+
+.review-management-verify-toggle {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.review-management-verify-toggle .review-management-toggle-switch {
+  margin: 0 auto;
+  display: block;
+}
+
+.review-management-toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 24px;
+  background-color: #d1d5db;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  padding: 0;
+}
+
+.review-management-toggle-switch.active {
+  background-color: #3b82f6;
+}
+
+.review-management-toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.review-management-toggle-switch.active .review-management-toggle-slider {
+  transform: translateX(24px);
+}
+
+.review-management-review-actions {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.review-management-action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.review-management-action-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.review-management-respond-btn {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.review-management-respond-btn:hover {
+  background-color: #2563eb;
+}
+
+.review-management-view-btn {
+  background-color: #6b7280;
+  color: white;
+}
+
+.review-management-view-btn:hover {
+  background-color: #4b5563;
+}
+
+.review-management-responded-btn {
+  background-color: #d1d5db;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.review-management-no-data {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+}
+
+/* Pagination */
+.review-management-pagination-section {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.review-management-pagination {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.review-management-pagination-btn {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.review-management-pagination-btn:hover:not(:disabled) {
+  background-color: #f9fafb;
+  border-color: #3b82f6;
+}
+
+.review-management-pagination-btn.active {
+  background-color: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.review-management-pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .review-management-stats-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .review-management-stat-card {
+    padding: 1.25rem;
+  }
+  
+  .review-management-stat-value {
+    font-size: 1.75rem;
+  }
+}
+
+@media (max-width: 1024px) {
+  .review-management-stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .review-management-filters-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .review-management-filters {
+    flex-wrap: wrap;
+  }
+
+  .review-management-table-container {
+    overflow-x: scroll;
+  }
+
+  .review-management-table {
+    min-width: 800px;
+  }
+
+  .review-management-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .review-management-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ML Filter Toggle */
+.review-management-ml-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #f3f4f6;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.review-management-ml-filter-toggle:hover {
+  background: #e5e7eb;
+}
+
+.review-management-ml-filter-toggle input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.review-management-ml-filter-toggle span {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+/* ML Prediction Info */
+.review-management-ml-info {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ml-info-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.ml-reason {
+  margin-top: 0.25rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.ml-reason small {
+  font-size: 0.7rem;
+}
+
+.ml-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ml-badge.ml-positive {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.ml-badge.ml-negative {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.ml-confidence {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.ml-legit-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.ml-legit-badge.legit {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.ml-legit-badge.not-legit {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+/* ML Filter Toggle States */
+.review-management-ml-filter-toggle.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.review-management-ml-filter-toggle.disabled input {
+  cursor: not-allowed;
+}
+
+.review-management-ml-filter-toggle.active {
+  background: #dbeafe;
+  border: 1px solid #3b82f6;
+}
+
+.review-management-ml-filter-toggle.active span {
+  color: #1e40af;
+  font-weight: 600;
+}
+
+/* Filter Status Banner */
+.review-management-filter-status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #dbeafe;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+}
+
+.filter-status-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.filter-status-text {
+  font-size: 0.875rem;
+  color: #1e40af;
+  font-weight: 500;
+}
+

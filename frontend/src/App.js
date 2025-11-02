@@ -27,17 +27,24 @@ import Comparison from './components/user/comparison';
 import Bookmarks from './components/user/bookmarks';
 import PropertyListings from './components/user/PropertyListings';
 import PropertyListing from './components/user/PropertyListing';
+import EnhancedPropertySearch from './components/user/EnhancedPropertySearch';
+import TrialSystem from './components/user/TrialSystem';
 import Feedback from './components/sharedpages/feedback';
+import Review from './components/sharedpages/review';
 import Support from './components/sharedpages/support';
 import Profile from './components/sharedpages/profile';
+import Preferences from './components/sharedpages/preferences';
 
 import SysAdmin from './components/system/SysAdmin';
 import UserAccount from './components/system/UserAccount';
 import UserDetails from './components/system/UserDetails';
 import FeedbackManagement from './components/system/FeedbackManagement';
+import ReviewManagement from './components/system/ReviewManagement';
+import PropertyManagement from './components/system/PropertyManagement';
 import RespondToFeedback from './components/system/RespondToFeedback';
 import ViewFeedback from './components/system/ViewFeedback';
 import ContentManagement from './components/system/ContentManagement';
+import RegionsManagement from './components/system/RegionsManagement';
 import EditHeroSection from './components/system/EditHeroSection';
 import EditHowItWorks from './components/system/EditHowItWorks';
 import EditSeeHowItWorks from './components/system/EditSeeHowItWorks';
@@ -54,6 +61,7 @@ import EditDisclaimer from './components/system/EditDisclaimer';
 import EditLegalTerms from './components/system/EditLegalTerms';
 import EditPrivacyPolicy from './components/system/EditPrivacyPolicy';
 import EditSubscriptionPlans from './components/system/EditSubscriptionPlans';
+import EditFeedbackForm from './components/system/EditFeedbackForm';
 import ContentPreview from './components/system/ContentPreview';
 import ApiTest from './components/ApiTest';
 
@@ -82,6 +90,8 @@ function App() {
         <Route path="/dashboard/comparison" element={<Comparison />} />
         <Route path="/dashboard/property-listings" element={<PropertyListings />} />
         <Route path="/dashboard/property-listing/:id" element={<PropertyListing />} />
+        <Route path="/dashboard/enhanced-search" element={<EnhancedPropertySearch />} />
+        <Route path="/dashboard/trial" element={<TrialSystem />} />
         <Route path="/bookmarks" element={<Bookmarks />} />
 
         <Route path="/dashboard/agent" element={<AgentUser />} />
@@ -91,16 +101,21 @@ function App() {
         <Route path="/dashboard/edit-listing/:id" element={<EditListing />} />
 
         <Route path="/feedback" element={<Feedback />} />
+        <Route path="/review" element={<Review />} />
         <Route path="/support" element={<Support />} />
+        <Route path="/preferences" element={<Preferences />} />
         <Route path="/profile" element={<Profile />} />
         
         <Route path="/dashboard/sysadmin" element={<SysAdmin />} />
         <Route path="/dashboard/user-accounts" element={<UserAccount />} />
         <Route path="/dashboard/user-details/:userId" element={<UserDetails />} />
+        <Route path="/dashboard/property-management" element={<PropertyManagement />} />
         <Route path="/dashboard/feedback-management" element={<FeedbackManagement />} />
+        <Route path="/dashboard/review-management" element={<ReviewManagement />} />
         <Route path="/dashboard/respond-to-feedback/:feedbackId" element={<RespondToFeedback />} />
         <Route path="/dashboard/view-feedback/:feedbackId" element={<ViewFeedback />} />
         <Route path="/dashboard/content-management" element={<ContentManagement />} />
+        <Route path="/dashboard/regions-management" element={<RegionsManagement />} />
         <Route path="/dashboard/edit-hero-section" element={<EditHeroSection />} />
         <Route path="/dashboard/edit-how-it-works" element={<EditHowItWorks />} />
         <Route path="/dashboard/edit-see-how-it-works" element={<EditSeeHowItWorks />} />
@@ -117,6 +132,7 @@ function App() {
         <Route path="/dashboard/edit-legal-terms" element={<EditLegalTerms />} />
         <Route path="/dashboard/edit-privacy-policy" element={<EditPrivacyPolicy />} />
         <Route path="/dashboard/edit-subscription-plans" element={<EditSubscriptionPlans />} />
+        <Route path="/dashboard/edit-feedback-form" element={<EditFeedbackForm />} />
         <Route path="/dashboard/content-preview" element={<ContentPreview />} />
         <Route path="/api-test" element={<ApiTest />} />
 
@@ -128,4 +144,3 @@ function App() {
 }
 
 export default App;
-

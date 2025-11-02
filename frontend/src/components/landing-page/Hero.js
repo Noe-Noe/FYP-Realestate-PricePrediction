@@ -88,7 +88,7 @@ const Hero = () => {
             <div className="hero-right">
               {heroContent.marketing_video_url && (
                 <video className="hero-video" autoPlay muted loop playsInline controls>
-                  <source src={heroContent.marketing_video_url} />
+                  <source src={heroContent.marketing_video_url} type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
               )}

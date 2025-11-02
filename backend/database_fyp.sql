@@ -282,7 +282,18 @@ COMMENT ON COLUMN property_views.user_id IS 'User ID if logged in, NULL for anon
 COMMENT ON COLUMN property_views.ip_address IS 'IP address for anonymous view tracking';
 COMMENT ON COLUMN property_views.viewed_at IS 'Timestamp when the property was viewed';
 
--- Agent regions
+-- Regions table (master list of available regions)
+CREATE TABLE regions (
+    id SERIAL PRIMARY KEY,
+    district VARCHAR(10) NOT NULL,
+    sector VARCHAR(100) NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Agent regions (assignments of agents to regions)
 CREATE TABLE agent_regions (
     id SERIAL PRIMARY KEY,
     agent_id INTEGER NOT NULL,
@@ -340,6 +351,7 @@ CREATE TABLE IF NOT EXISTS howitworks_properties (
 CREATE TABLE IF NOT EXISTS features_section (
     id INTEGER PRIMARY KEY DEFAULT 1,
     section_title VARCHAR(255) NOT NULL DEFAULT 'How it Works',
+    tutorial_video_url VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -350,6 +362,7 @@ CREATE TABLE IF NOT EXISTS features_steps (
     step_title VARCHAR(255) NOT NULL,
     step_description TEXT NOT NULL,
     step_image VARCHAR(500),
+    step_video VARCHAR(500),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -500,3 +513,24 @@ INSERT INTO howitworks_properties (id, property_order, title, address, level, un
   (2, 2, 'Sample Title 2', '456 Example Ave', 'Level 5', '85 sqm', 'Condo', NULL, true),
   (3, 3, 'Sample Title 3', '789 Example Rd', 'Level 10', '120 sqm', 'HDB', NULL, true)
 ON CONFLICT (id) DO NOTHING;
+
+-- INSERT SYSTEM ADMIN
+-- Default password: admin123 (should be changed after first login)
+INSERT INTO users (
+    email, 
+    password_hash, 
+    full_name, 
+    user_type, 
+    subscription_status, 
+    is_active, 
+    first_time_user
+) VALUES (
+    'admin@valuez.com',
+    'scrypt:32768:8:1$EvQ3WgiKJWICrQJm$1e60455268a09a90c6ffa7aad1f3599d0fff4d0cd23aba43b1a23b668ad33a65e3042ed9edd1761a3d2f4582a61e67f2b261887876d1a07cb5a31a124a8c36e9',
+    'System Administrator',
+    'admin',
+    'active',
+    TRUE,
+    FALSE
+)
+ON CONFLICT (email) DO NOTHING;

@@ -4,6 +4,7 @@ import { GOOGLE_MAPS_API_KEY } from '../../config/maps';
 import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
+import { bookmarksAPI, predictionAPI, authAPI } from '../../services/api';
 import './priceprediction.css';
 
 const GOOGLE_MAPS_LIBRARIES = ['places', 'geometry'];
@@ -53,6 +54,7 @@ const PricePrediction = () => {
   const [searchError, setSearchError] = useState('');
   const [recentSearches, setRecentSearches] = useState([]);
   const [mapInstance, setMapInstance] = useState(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const navigate = useNavigate();
 
   const markerRef = useRef(null);
@@ -354,13 +356,31 @@ const PricePrediction = () => {
     });
   };
 
-  const handleSearch = (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
     
     // Validate required fields
     if (!formData.address || !formData.propertyType || !formData.floorArea || !formData.level || !formData.unit) {
       setSearchError('Please fill in all required fields');
       return;
+    }
+    
+    // Check if user is authenticated and if they're a free user
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      try {
+        // Check prediction limit for free users
+        const limitCheck = await predictionAPI.checkLimit();
+        
+        if (limitCheck.is_free_user && limitCheck.limit_reached) {
+          // Show upgrade modal instead of navigating
+          setShowUpgradeModal(true);
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking prediction limit:', error);
+        // Continue with search if check fails (don't block user)
+      }
     }
     
     // Save to recent searches (only if not from bookmark)
@@ -398,6 +418,19 @@ const PricePrediction = () => {
     
     console.log('Navigating to prediction with data:', searchData);
     navigate('/dashboard/prediction', { state: { searchData } });
+  };
+
+  const handleUpgradeConfirm = () => {
+    setShowUpgradeModal(false);
+    // Store in sessionStorage as backup
+    sessionStorage.setItem('showCheckoutModal', 'true');
+    // Navigate to profile page with checkout modal open
+    navigate('/profile', { state: { showCheckoutModal: true } });
+  };
+
+  const handleUpgradeCancel = () => {
+    setShowUpgradeModal(false);
+    // Stay on the same page
   };
 
   const handleRecentSearchClick = (search) => {
@@ -639,6 +672,53 @@ const PricePrediction = () => {
       </div>
 
       {/* Footer */}
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="price-prediction-upgrade-modal-overlay">
+          <div className="price-prediction-upgrade-modal">
+            <div className="price-prediction-upgrade-modal-header">
+              <h2>Upgrade to Premium</h2>
+              <button 
+                className="price-prediction-upgrade-modal-close"
+                onClick={handleUpgradeCancel}
+              >
+                ×
+              </button>
+            </div>
+            <div className="price-prediction-upgrade-modal-content">
+              <p className="price-prediction-upgrade-message">
+                You have reached your free prediction limit (3 searches).
+              </p>
+              <p className="price-prediction-upgrade-subtitle">
+                Upgrade to Premium to get unlimited price predictions and access to all premium features!
+              </p>
+              <div className="price-prediction-upgrade-features">
+                <div className="price-prediction-upgrade-feature">
+                  ✓ Unlimited price predictions
+                </div>
+                <div className="price-prediction-upgrade-feature">
+                  ✓ Property comparisons
+                </div>
+              </div>
+            </div>
+            <div className="price-prediction-upgrade-modal-actions">
+              <button
+                className="price-prediction-upgrade-btn-cancel"
+                onClick={handleUpgradeCancel}
+              >
+                Cancel
+              </button>
+              <button
+                className="price-prediction-upgrade-btn-confirm"
+                onClick={handleUpgradeConfirm}
+              >
+                Upgrade to Premium
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   );

@@ -110,7 +110,7 @@ const EditHeroSection = () => {
         if (response.success) {
           // Convert relative URL to full URL for display
           const fullUrl = response.file_url.startsWith('/admin/') 
-            ? `http://localhost:5000${response.file_url}` 
+            ? `${BACKEND_ORIGIN}${response.file_url}` 
             : response.file_url;
           
           setFormData(prev => ({
@@ -120,12 +120,12 @@ const EditHeroSection = () => {
           setMessage('Marketing video uploaded successfully! Saving to hero content...');
 
           // Immediately persist the new video URL to backend so landing page reflects it
-          const backgroundUrlForSave = formData.backgroundImage && formData.backgroundImage.startsWith('http://localhost:5000/admin/')
-            ? formData.backgroundImage.replace('http://localhost:5000', '')
+          const backgroundUrlForSave = formData.backgroundImage && formData.backgroundImage.startsWith(`${BACKEND_ORIGIN}/admin/`)
+            ? formData.backgroundImage.replace(BACKEND_ORIGIN, '')
             : formData.backgroundImage;
 
-          const videoUrlForSave = fullUrl.startsWith('http://localhost:5000/admin/')
-            ? fullUrl.replace('http://localhost:5000', '')
+          const videoUrlForSave = fullUrl.startsWith(`${BACKEND_ORIGIN}/admin/`)
+            ? fullUrl.replace(BACKEND_ORIGIN, '')
             : fullUrl;
 
           const contentData = {
@@ -295,26 +295,43 @@ const EditHeroSection = () => {
             {/* Marketing Video */}
             <div className="edit-hero-form-group">
               <label className="edit-hero-form-label">Marketing Video</label>
+              
+              {/* Video URL Input */}
+              <input
+                type="text"
+                name="marketingVideo"
+                value={formData.marketingVideo}
+                onChange={handleInputChange}
+                className="edit-hero-form-input"
+                placeholder="Enter video URL (e.g., https://example.com/video.mp4)"
+                style={{ marginBottom: '15px' }}
+              />
+              <p style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>
+                Enter a video URL or upload a video file
+              </p>
+              
               <div className="edit-hero-image-preview-container">
-                {formData.marketingVideo && (formData.marketingVideo.endsWith('.mp4') || formData.marketingVideo.endsWith('.webm') || formData.marketingVideo.endsWith('.ogg') || formData.marketingVideo.startsWith('http')) ? (
+                {formData.marketingVideo && (formData.marketingVideo.endsWith('.mp4') || formData.marketingVideo.endsWith('.webm') || formData.marketingVideo.endsWith('.ogg') || formData.marketingVideo.endsWith('.mov') || formData.marketingVideo.startsWith('http')) ? (
                   <video src={formData.marketingVideo} className="edit-hero-background-preview" controls muted playsInline />
                 ) : (
-                  <img
-                    src={formData.marketingVideo}
-                    alt="Marketing video"
-                    className="edit-hero-background-preview"
-                  />
+                  formData.marketingVideo && (
+                    <img
+                      src={formData.marketingVideo}
+                      alt="Marketing video"
+                      className="edit-hero-background-preview"
+                    />
+                  )
                 )}
                 <div className="edit-hero-image-upload-section">
                   <input
                     type="file"
                     id="video-upload"
-                    accept="video/*,image/*"
+                    accept="video/*"
                     onChange={handleVideoUpload}
                     className="edit-hero-file-input"
                   />
                   <label htmlFor="video-upload" className="edit-hero-upload-btn">
-                    {uploading.video ? 'Uploading...' : 'Upload New Video'}
+                    {uploading.video ? 'Uploading...' : 'Upload Video File'}
                   </label>
                 </div>
               </div>

@@ -47,13 +47,13 @@ const Footer = () => {
       
       if (modalType === 'terms') {
         const response = await api.legal.getContent('terms_of_use');
-        content = response.success ? response.data.content : 'Terms of Use content not available.';
+        content = response.success && response.data ? response.data.content : 'Terms of Use content not available.';
       } else if (modalType === 'privacy') {
         const response = await api.legal.getContent('privacy_policy');
-        content = response.success ? response.data.content : 'Privacy Policy content not available.';
+        content = response.success && response.data ? response.data.content : 'Privacy Policy content not available.';
       } else if (modalType === 'disclaimer') {
         const response = await api.legal.getContent('disclaimer');
-        content = response.success ? response.data.content : 'Disclaimer content not available.';
+        content = response.success && response.data ? response.data.content : 'Disclaimer content not available.';
       } else if (modalType === 'contact') {
         // For contact, we'll show the contact information
         content = contactInfo.map(item => 

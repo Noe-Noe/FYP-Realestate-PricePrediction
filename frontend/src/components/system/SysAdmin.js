@@ -47,6 +47,32 @@ const SysAdmin = () => {
     fetchAdminData();
   }, []);
 
+  // Refresh data when window regains focus (user navigates back from feedback management)
+  useEffect(() => {
+    const handleFocus = () => {
+      const fetchAdminData = async () => {
+        try {
+          // Fetch metrics
+          const metricsResponse = await authAPI.getAdminMetrics();
+          setMetricsData(metricsResponse);
+          
+          // Fetch feedback
+          const feedbackResponse = await authAPI.getAllFeedback(1, 3);
+          setRecentFeedback(feedbackResponse.feedback || []);
+        } catch (err) {
+          console.error('Error refreshing admin data:', err);
+        }
+      };
+      fetchAdminData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
 
 
 
@@ -149,7 +175,6 @@ const SysAdmin = () => {
                       <tr>
                         <th>Name</th>
                         <th>Email</th>
-                        <th>Referral Code</th>
                         <th>User Type</th>
                         <th>Account Status</th>
                       </tr>
@@ -159,9 +184,6 @@ const SysAdmin = () => {
                         <tr key={user.id} className="sys-admin-user-row">
                           <td className="sys-admin-user-name">{user.full_name}</td>
                           <td className="sys-admin-user-email">{user.email}</td>
-                          <td className="sys-admin-referral-code">
-                            {user.referral_code || (user.user_type === 'premium' ? 'Generating...' : 'N/A')}
-                          </td>
                           <td className="sys-admin-user-type">
                             <span className={getUserTypeBadgeClass(user.user_type)}>
                               {user.user_type}
@@ -199,7 +221,33 @@ const SysAdmin = () => {
                 <div className="sys-admin-error">Error: {error}</div>
               ) : recentFeedback.length > 0 ? (
                 <div className="sys-admin-feedback-list">
-                  {recentFeedback.map((feedback) => (
+                  {recentFeedback.map((feedback) => {
+                    // Get inquiry type label
+                    const getInquiryTypeLabel = (type) => {
+                      switch(type) {
+                        case 'general':
+                          return 'General Feedback';
+                        case 'support':
+                          return 'Support Request';
+                        case 'property_viewing':
+                          return 'Property Viewing Inquiry';
+                        case 'price_quote':
+                          return 'Price Quote Request';
+                        default:
+                          return type;
+                      }
+                    };
+
+                    // Get status badge class - use admin_response to determine status
+                    const getStatusClass = (hasAdminResponse) => {
+                      return hasAdminResponse ? 'status-responded' : 'status-progress';
+                    };
+
+                    const getStatusText = (hasAdminResponse) => {
+                      return hasAdminResponse ? 'Responded' : 'In Progress';
+                    };
+
+                    return (
                     <div key={feedback.id} className="sys-admin-feedback-item">
                       <div className="sys-admin-feedback-header">
                         <div className="sys-admin-feedback-user-info">
@@ -207,24 +255,25 @@ const SysAdmin = () => {
                           <span className="sys-admin-feedback-user-email">({feedback.user_email})</span>
                         </div>
                         <div className="sys-admin-feedback-badges">
-                          <span className="sys-admin-feedback-rating">
-                            {'★'.repeat(feedback.rating)}{'☆'.repeat(5-feedback.rating)} {feedback.rating}/5
+                            <span className="sys-admin-feedback-inquiry-type">
+                              {getInquiryTypeLabel(feedback.inquiry_type)}
                           </span>
-                          <span className={`sys-admin-feedback-status ${feedback.admin_response ? 'responded' : 'pending'}`}>
-                            {feedback.admin_response ? 'Responded' : 'Pending'}
+                            <span className={`sys-admin-feedback-status ${getStatusClass(!!feedback.admin_response)}`}>
+                              {getStatusText(!!feedback.admin_response)}
                           </span>
                         </div>
                       </div>
                       <div className="sys-admin-feedback-content">
-                        <p className="sys-admin-feedback-text">"{feedback.review_text}"</p>
+                          <p className="sys-admin-feedback-text">"{feedback.message}"</p>
                       </div>
                       <div className="sys-admin-feedback-actions">
                         <span className="sys-admin-feedback-date">
-                          {feedback.review_date ? new Date(feedback.review_date).toLocaleDateString() : 'No date'}
+                            {feedback.created_at ? new Date(feedback.created_at).toLocaleDateString() : 'No date'}
                         </span>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="sys-admin-no-data">No feedback available</div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { propertiesAPI, predictionAPI } from '../../services/api';
 import './PropertyCard.css';
@@ -18,7 +18,9 @@ const PropertyCard = ({
   amenitiesError = '',
   amenityOptions = [],
   // ML prediction data passed from parent components
-  mlPredictionData: parentMlPredictionData = null
+  mlPredictionData: parentMlPredictionData = null,
+  // Callback to expose data for export
+  onDataUpdate = null
 }) => {
   const navigate = useNavigate();
   
@@ -46,6 +48,14 @@ const PropertyCard = ({
   
   // Sorting state for similar properties transactions
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  
+  // Use ref to store the callback to avoid infinite loops
+  const onDataUpdateRef = useRef(onDataUpdate);
+  
+  // Update ref when callback changes
+  useEffect(() => {
+    onDataUpdateRef.current = onDataUpdate;
+  }, [onDataUpdate]);
   
   // Update ML prediction data when parent data changes
   useEffect(() => {
@@ -178,7 +188,7 @@ const PropertyCard = ({
         // Run all API calls in parallel
         const [nearbyResponse, agentsResponse] = await Promise.allSettled([
           propertiesAPI.getNearbyProperties(property.address, 5, property.propertyType),
-          propertiesAPI.getAgentsByRegion(property.address)
+          propertiesAPI.getAgentsByRegion(property.address, property.propertyType)
         ]);
         
         // Handle nearby properties response
@@ -210,6 +220,18 @@ const PropertyCard = ({
 
     fetchAllData();
   }, [property?.address]);
+
+  // Expose data to parent via callback when data changes
+  // Call callback when data changes, but don't include callback in deps (uses ref instead)
+  useEffect(() => {
+    if (onDataUpdateRef.current) {
+      onDataUpdateRef.current({
+        nearbyProperties,
+        regionAgents,
+        mlPredictionData
+      });
+    }
+  }, [nearbyProperties, regionAgents, mlPredictionData]); // Removed onDataUpdate from deps to prevent infinite loop
 
   const handleSeeMoreClick = () => {
     setShowAllTransactions(!showAllTransactions);

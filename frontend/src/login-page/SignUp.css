@@ -253,7 +253,7 @@
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
-  overflow: hidden;
+  overflow: visible; /* Changed from hidden to visible so badge can extend beyond card */
   min-height: 450px;
   width: 100%;
   display: flex;
@@ -279,15 +279,18 @@
 
 .plan-badge {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
   background: #fbbf24;
   color: #92400e;
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1.5rem;
   border-radius: 20px;
-  z-index: 1;
+  z-index: 10;
+  white-space: nowrap;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .plan-card.selected .plan-badge {
@@ -299,7 +302,8 @@
   text-align: center;
   margin-bottom: 1.5rem; /* Reduced margin */
   flex-shrink: 0;
-  margin-top: 1rem;
+  margin-top: 1.5rem; /* Increased top margin to make room for badge */
+  padding-top: 0.5rem; /* Additional padding when badge is present */
 }
 
 .plan-title {
@@ -607,6 +611,58 @@
   text-align: center;
 }
 
+/* Specializations (Property Types) Styles */
+.signup-specializations-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.signup-specialization-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.signup-specialization-checkbox:hover {
+  border-color: #3b82f6;
+  background: #f0f9ff;
+}
+
+.signup-specialization-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.signup-specialization-checkbox input[type="checkbox"]:checked + span {
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.signup-specialization-checkbox:has(input[type="checkbox"]:checked) {
+  border-color: #3b82f6;
+  background: #dbeafe;
+}
+
+.signup-form-help-text {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
 /* OTP Inputs */
 .otp-container {
   display: flex;
@@ -728,7 +784,7 @@
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
-  max-height: 200px;
+  max-height: 400px;
   overflow-y: auto;
 }
 
@@ -739,11 +795,56 @@
   margin: 0 0 0.75rem 0;
 }
 
+.terms-text h3:first-child {
+  margin-top: 0;
+}
+
+.terms-subheading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 2rem 0 0.75rem 0;
+}
+
+.terms-content-text {
+  margin-bottom: 1rem;
+}
+
 .terms-text p {
   color: #6b7280;
   line-height: 1.6;
   margin: 0 0 1rem 0;
   font-size: 0.875rem;
+}
+
+.terms-paragraph {
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+}
+
+.terms-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 1rem 0;
+}
+
+.terms-list li {
+  position: relative;
+  padding: 0.25rem 0 0.25rem 1.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.terms-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: #14b8a6;
+  font-weight: bold;
+  font-size: 1.2rem;
 }
 
 .checkbox-group {

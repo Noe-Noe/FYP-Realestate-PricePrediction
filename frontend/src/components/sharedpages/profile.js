@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApi } from '../../context/ApiContext';
 import { authAPI } from '../../services/api';
 import { BACKEND_ORIGIN } from '../../services/api';
@@ -10,6 +10,7 @@ import './profile.css';
 
 const Profile = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { getUserName, logout } = useApi();
   const [activeTab, setActiveTab] = useState('profile');
   
@@ -25,8 +26,20 @@ const Profile = () => {
     ceaNumber: '',
     agentCompany: '',
     companyPhoneNumber: '',
-    companyEmail: ''
+    companyEmail: '',
+    specializations: [] // Array of selected property type specializations
   });
+
+  // Property types for specialization (same as price prediction)
+  const propertyTypes = [
+    'Office',
+    'Retail',
+    'Shop House',
+    'Single-user Factory',
+    'Multiple-user Factory',
+    'Warehouse',
+    'Business Parks'
+  ];
   
   // License picture state
   const [licensePicture, setLicensePicture] = useState(null);
@@ -44,13 +57,29 @@ const Profile = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [apiError, setApiError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   
   // Subscription upgrade states
-  const [referralCode, setReferralCode] = useState('');
   const [selectedPlan, setSelectedPlan] = useState('monthly');
   const [isUpgrading, setIsUpgrading] = useState(false);
+  
+  // Payment form data
+  const [paymentData, setPaymentData] = useState({
+    cardNumber: '',
+    expiry: '',
+    cvv: '',
+    cardName: ''
+  });
+  
+  // Payment form errors
+  const [paymentErrors, setPaymentErrors] = useState({
+    cardNumber: '',
+    expiry: '',
+    cvv: '',
+    cardName: ''
+  });
   
   // User data from database
   const [userProfile, setUserProfile] = useState({
@@ -101,7 +130,8 @@ const Profile = () => {
                 ceaNumber: agentProfileResponse.cea_number || '',
                 agentCompany: agentProfileResponse.company_name || '',
                 companyPhoneNumber: agentProfileResponse.company_phone || '',
-                companyEmail: agentProfileResponse.company_email || ''
+                companyEmail: agentProfileResponse.company_email || '',
+                specializations: agentProfileResponse.specializations || []
               });
               
               // Set license picture URL if it exists
@@ -161,6 +191,52 @@ const Profile = () => {
     loadUserProfile();
   }, []);
 
+  // Check if subscription or checkout modal should be shown from navigation state
+  useEffect(() => {
+    console.log('🔍 Profile useEffect - location.state:', location.state);
+    
+    // Check sessionStorage first (backup for navigation state)
+    const showCheckoutFromStorage = sessionStorage.getItem('showCheckoutModal');
+    console.log('🔍 Profile useEffect - sessionStorage showCheckoutModal:', showCheckoutFromStorage);
+    
+    const shouldShowCheckout = location.state?.showCheckoutModal || showCheckoutFromStorage === 'true';
+    const shouldShowSubscription = location.state?.showSubscriptionModal;
+    
+    if (shouldShowCheckout) {
+      console.log('✅ Opening checkout modal from navigation state');
+      setActiveTab('profile');
+      setShowSubscriptionModal(false);
+      // Use setTimeout to ensure state update happens
+      setTimeout(() => {
+        setShowCheckoutModal(true);
+        console.log('✅ showCheckoutModal set to true');
+      }, 0);
+      // Default to monthly plan if not set
+      setSelectedPlan('monthly');
+      // Clear sessionStorage
+      sessionStorage.removeItem('showCheckoutModal');
+      
+      // Clear the state after a delay to prevent showing modal on subsequent visits
+      setTimeout(() => {
+        window.history.replaceState({}, document.title);
+      }, 500);
+    } else if (shouldShowSubscription) {
+      console.log('Opening subscription modal from navigation state');
+      setActiveTab('profile');
+      setShowSubscriptionModal(true);
+      // Clear the state after a delay to prevent showing modal on subsequent visits
+      setTimeout(() => {
+        window.history.replaceState({}, document.title);
+      }, 500);
+    }
+    
+  }, [location.state, location.pathname]);
+
+  // Debug: Log when showCheckoutModal changes
+  useEffect(() => {
+    console.log('🔵 showCheckoutModal state changed to:', showCheckoutModal);
+  }, [showCheckoutModal]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -179,11 +255,6 @@ const Profile = () => {
     }));
     setApiError('');
     setSuccessMessage('');
-  };
-  
-  const handleReferralCodeChange = (e) => {
-    setReferralCode(e.target.value);
-    setApiError('');
   };
   
   const handlePlanSelection = (e) => {
@@ -209,8 +280,8 @@ const Profile = () => {
       setApiError('New password must be different from your current password!');
       return;
     }
-    if (passwordData.newPassword.length < 6) {
-      setApiError('New password must be at least 6 characters long!');
+    if (passwordData.newPassword.length < 8) {
+      setApiError('New password must be at least 8 characters long!');
       return;
     }
 
@@ -257,7 +328,8 @@ const Profile = () => {
           cea_number: agentFormData.ceaNumber,
           company_name: agentFormData.agentCompany,
           company_phone: agentFormData.companyPhoneNumber,
-          company_email: agentFormData.companyEmail
+          company_email: agentFormData.companyEmail,
+          specializations: agentFormData.specializations
         };
       }
       
@@ -275,11 +347,26 @@ const Profile = () => {
       
       // Update agent form data if response includes agent info
       if (response.agent_profile) {
+        // Handle specializations - ensure it's an array
+        let specializations = [];
+        if (response.agent_profile.specializations) {
+          if (Array.isArray(response.agent_profile.specializations)) {
+            specializations = response.agent_profile.specializations;
+          } else if (typeof response.agent_profile.specializations === 'string') {
+            try {
+              specializations = JSON.parse(response.agent_profile.specializations);
+            } catch (e) {
+              specializations = [];
+            }
+          }
+        }
+        
         setAgentFormData({
           ceaNumber: response.agent_profile.cea_number || '',
           agentCompany: response.agent_profile.company_name || '',
           companyPhoneNumber: response.agent_profile.company_phone || '',
-          companyEmail: response.agent_profile.company_email || ''
+          companyEmail: response.agent_profile.company_email || '',
+          specializations: specializations
         });
         
         // Update license picture URL if provided
@@ -362,26 +449,152 @@ const Profile = () => {
   };
 
   const handleUpgradePlan = async () => {
+    // Validate plan selection
+    if (!selectedPlan) {
+      setApiError('Please select a plan (monthly or yearly)');
+      return;
+    }
+    
+    // Close the subscription modal and show checkout modal
+    setShowSubscriptionModal(false);
+    setShowCheckoutModal(true);
+  };
+
+  const handlePaymentInputChange = (e) => {
+    const { name, value } = e.target;
+    
+    // Validate based on field type and format input
+    let validatedValue = value;
+    
+    if (name === 'cardNumber') {
+      // Only allow numbers
+      validatedValue = value.replace(/[^\d]/g, '');
+      // Format as XXXX XXXX XXXX XXXX
+      validatedValue = validatedValue.replace(/(.{4})/g, '$1 ').trim();
+      // Limit to 16 digits
+      if (validatedValue.replace(/\s/g, '').length > 16) {
+        validatedValue = validatedValue.replace(/\s/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+      }
+    } else if (name === 'expiry') {
+      // Only allow numbers
+      validatedValue = value.replace(/[^\d]/g, '');
+      // Auto format MM/YY
+      if (validatedValue.length >= 2 && !validatedValue.includes('/')) {
+        validatedValue = validatedValue.slice(0, 4);
+        validatedValue = validatedValue.slice(0, 2) + '/' + validatedValue.slice(2);
+      }
+      // Limit to 4 digits
+      if (validatedValue.replace(/\//g, '').length > 4) {
+        validatedValue = validatedValue.replace(/\//g, '').slice(0, 4);
+        if (validatedValue.length >= 2) {
+          validatedValue = validatedValue.slice(0, 2) + '/' + validatedValue.slice(2);
+        }
+      }
+    } else if (name === 'cvv') {
+      // Only allow numbers, max 3 digits
+      validatedValue = value.replace(/[^\d]/g, '').slice(0, 3);
+    } else if (name === 'cardName') {
+      // Only allow letters, spaces, and hyphens
+      validatedValue = value.replace(/[^a-zA-Z\s-]/g, '');
+    }
+    
+    setPaymentData(prev => ({
+      ...prev,
+      [name]: validatedValue
+    }));
+    
+    // Clear error for this field when user starts typing
+    setPaymentErrors(prev => ({
+      ...prev,
+      [name]: ''
+    }));
+  };
+  
+  const handlePaymentBlur = (e) => {
+    const { name, value } = e.target;
+    let error = '';
+    
+    if (name === 'cardNumber') {
+      const cardDigits = value.replace(/\s/g, '');
+      if (!cardDigits || cardDigits.length < 13 || cardDigits.length > 16) {
+        error = 'Card number must be 13-16 digits';
+      }
+    } else if (name === 'expiry') {
+      if (!value || !/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(value)) {
+        error = 'Please enter valid expiry (MM/YY)';
+      }
+    } else if (name === 'cvv') {
+      if (!value || value.length !== 3) {
+        error = 'CVV must be 3 digits';
+      }
+    } else if (name === 'cardName') {
+      if (!value || value.length < 2) {
+        error = 'Please enter cardholder name';
+      }
+    }
+    
+    if (error) {
+      setPaymentErrors(prev => ({
+        ...prev,
+        [name]: error
+      }));
+    }
+  };
+
+  const handleCompletePayment = async () => {
     try {
       setIsUpgrading(true);
       setApiError('');
       setSuccessMessage('');
       
-      // Validate plan selection
-      if (!selectedPlan) {
-        setApiError('Please select a plan (monthly or yearly)');
+      // Validate all payment fields
+      const errors = {};
+      let hasErrors = false;
+      
+      // Card number validation
+      if (!paymentData.cardNumber || paymentData.cardNumber.replace(/\s/g, '').length < 13) {
+        errors.cardNumber = 'Please enter a valid card number (13-16 digits)';
+        hasErrors = true;
+      }
+      
+      // Expiry validation
+      if (!paymentData.expiry || !/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(paymentData.expiry)) {
+        errors.expiry = 'Please enter a valid expiry date (MM/YY)';
+        hasErrors = true;
+      }
+      
+      // CVV validation
+      if (!paymentData.cvv || paymentData.cvv.length !== 3) {
+        errors.cvv = 'CVV must be 3 digits';
+        hasErrors = true;
+      }
+      
+      // Cardholder name validation
+      if (!paymentData.cardName || paymentData.cardName.length < 2) {
+        errors.cardName = 'Please enter cardholder name (letters only)';
+        hasErrors = true;
+      }
+      
+      if (hasErrors) {
+        setPaymentErrors(errors);
+        setApiError('Please correct the errors in the payment form');
+        return;
+      }
+      
+      // Check for existing field errors
+      if (paymentErrors.cardNumber || paymentErrors.expiry || paymentErrors.cvv || paymentErrors.cardName) {
+        setApiError('Please correct the errors in the payment form');
         return;
       }
       
       // Prepare upgrade data
       const upgradeData = {
-        plan: selectedPlan,
-        referralCode: referralCode.trim() || null
+        plan: selectedPlan
       };
       
       console.log('Upgrading with data:', upgradeData);
       
-      // Call backend API to upgrade with plan and referral code
+      // Call backend API to upgrade with plan
       const response = await authAPI.upgradeToPremium(upgradeData);
       
       // Update local state
@@ -397,13 +610,18 @@ const Profile = () => {
       localStorage.setItem('userType', 'premium');
       
       setSuccessMessage(`Successfully upgraded to Premium ${selectedPlan} plan! Redirecting to dashboard...`);
-      setShowSubscriptionModal(false);
+      setShowCheckoutModal(false);
       
       // Reset form
-      setReferralCode('');
       setSelectedPlan('monthly');
+      setPaymentData({
+        cardNumber: '',
+        expiry: '',
+        cvv: '',
+        cardName: ''
+      });
       
-      // Redirect to dashboard after a short delay to show success message
+      // Redirect to premium dashboard after a short delay to show success message
       setTimeout(() => {
         navigate('/dashboard');
       }, 2000);
@@ -414,6 +632,39 @@ const Profile = () => {
     } finally {
       setIsUpgrading(false);
     }
+  };
+
+  const handleCloseCheckoutModal = () => {
+    setShowCheckoutModal(false);
+    // Reset payment data and errors when closing
+    setPaymentData({
+      cardNumber: '',
+      expiry: '',
+      cvv: '',
+      cardName: ''
+    });
+    setPaymentErrors({
+      cardNumber: '',
+      expiry: '',
+      cvv: '',
+      cardName: ''
+    });
+  };
+
+  const handleBackToSubscription = () => {
+    setShowCheckoutModal(false);
+    // Only show subscription modal if user came from subscription modal
+    // If they came directly to checkout (from price prediction), go back to price prediction page
+    if (location.state?.showCheckoutModal) {
+      // User came directly to checkout from price prediction, navigate back
+      navigate('/dashboard/priceprediction');
+    } else {
+    setShowSubscriptionModal(true);
+    }
+  };
+
+  const getPlanPrice = () => {
+    return selectedPlan === 'yearly' ? '199.99' : '29';
   };
 
   const handleDowngradePlan = async () => {
@@ -460,7 +711,7 @@ const Profile = () => {
 
   const handleDeactivateAccount = async () => {
     const confirmed = window.confirm(
-      '⚠️ WARNING: This action will deactivate your account. You will not be able to log in with this account. To reactivate, you will need to sign up again with a new account.\n\nAre you sure you want to proceed?'
+      '⚠️ WARNING: This action will deactivate your account. You will not be able to log in with this account.\n\nAre you sure you want to proceed?'
     );
     
     if (confirmed) {
@@ -472,7 +723,7 @@ const Profile = () => {
         await authAPI.deactivateOwnAccount();
         
         // Show deactivation confirmation
-        alert('Your account has been deactivated. You will be logged out. You can sign up again with the same email address to create a new account.');
+        alert('Your account has been deactivated. You will be logged out.');
         
         // Logout and clear user data, redirect to landing page
         logout('/');
@@ -646,6 +897,38 @@ const Profile = () => {
                   placeholder="Enter your company email address"
                   disabled={isLoading}
                 />
+              </div>
+
+              <div className="profile-form-group">
+                <label htmlFor="specializations">Specializations (Property Types)</label>
+                <div className="profile-specializations-container">
+                  {propertyTypes.map(propertyType => (
+                    <label key={propertyType} className="profile-specialization-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={agentFormData.specializations.includes(propertyType)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAgentFormData(prev => ({
+                              ...prev,
+                              specializations: [...prev.specializations, propertyType]
+                            }));
+                          } else {
+                            setAgentFormData(prev => ({
+                              ...prev,
+                              specializations: prev.specializations.filter(s => s !== propertyType)
+                            }));
+                          }
+                        }}
+                        disabled={isLoading}
+                      />
+                      <span>{propertyType}</span>
+                    </label>
+                  ))}
+                </div>
+                <small className="profile-form-help-text">
+                  Select one or more property types you specialize in
+                </small>
               </div>
             </section>
           )}
@@ -905,19 +1188,6 @@ const Profile = () => {
                   <h4>Upgrade to Premium</h4>
                   <p>Get access to advanced search filters, detailed reports, and personalized alerts.</p>
                   
-                  {/* Referral Code Input */}
-                  <div className="profile-referral-section">
-                    <label htmlFor="referralCode">Referral Code (Optional):</label>
-                    <input
-                      type="text"
-                      id="referralCode"
-                      value={referralCode}
-                      onChange={handleReferralCodeChange}
-                      placeholder="Enter referral code for discount"
-                      className="profile-referral-input"
-                    />
-                  </div>
-                  
                   {/* Payment Options */}
                   <div className="profile-payment-options">
                     <h5>Choose Your Plan:</h5>
@@ -962,6 +1232,183 @@ const Profile = () => {
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Checkout Modal */}
+      {showCheckoutModal && (
+        <div className="profile-modal-overlay checkout-modal-overlay" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowCheckoutModal(false);
+          }
+        }}>
+          <div className="checkout-modal-container">
+            {/* Left Panel - Payment Form */}
+            <div className="checkout-form-panel">
+              <div className="checkout-header">
+                <button 
+                  className="checkout-back-btn"
+                  onClick={handleBackToSubscription}
+                >
+                  ← Back
+                </button>
+              </div>
+              
+              <div className="checkout-content">
+                <h2 className="checkout-title">Payment</h2>
+                <p className="checkout-subtitle">Enter your payment details to complete the upgrade</p>
+                
+                {/* Error and Success Messages */}
+                {apiError && (
+                  <div className="checkout-error-message">
+                    {apiError}
+                  </div>
+                )}
+                
+                <div className="payment-form">
+                  <div className="form-group">
+                    <label htmlFor="cardNumber">Card Number</label>
+                    <div className={`input-container ${paymentErrors.cardNumber ? 'input-error' : ''}`}>
+                      <span className="input-icon">💳</span>
+                      <input
+                        type="text"
+                        id="cardNumber"
+                        name="cardNumber"
+                        value={paymentData.cardNumber}
+                        onChange={handlePaymentInputChange}
+                        onBlur={handlePaymentBlur}
+                        placeholder="1234 5678 9012 3456"
+                        className="card-input"
+                        maxLength={19}
+                      />
+                    </div>
+                    {paymentErrors.cardNumber && (
+                      <span className="field-error">{paymentErrors.cardNumber}</span>
+                    )}
+                  </div>
+
+                  <div className="card-row">
+                    <div className="form-group">
+                      <label htmlFor="expiry">Expiry Date</label>
+                      <div className={`input-container ${paymentErrors.expiry ? 'input-error' : ''}`}>
+                        <span className="input-icon">📅</span>
+                        <input
+                          type="text"
+                          id="expiry"
+                          name="expiry"
+                          value={paymentData.expiry}
+                          onChange={handlePaymentInputChange}
+                          onBlur={handlePaymentBlur}
+                          placeholder="MM/YY"
+                          className="card-input"
+                          maxLength={5}
+                        />
+                      </div>
+                      {paymentErrors.expiry && (
+                        <span className="field-error">{paymentErrors.expiry}</span>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="cvv">CVV</label>
+                      <div className={`input-container ${paymentErrors.cvv ? 'input-error' : ''}`}>
+                        <span className="input-icon">🔒</span>
+                        <input
+                          type="text"
+                          id="cvv"
+                          name="cvv"
+                          value={paymentData.cvv}
+                          onChange={handlePaymentInputChange}
+                          onBlur={handlePaymentBlur}
+                          placeholder="123"
+                          className="card-input"
+                          maxLength={3}
+                        />
+                      </div>
+                      {paymentErrors.cvv && (
+                        <span className="field-error">{paymentErrors.cvv}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="cardName">Cardholder Name</label>
+                    <div className={`input-container ${paymentErrors.cardName ? 'input-error' : ''}`}>
+                      <span className="input-icon">👤</span>
+                      <input
+                        type="text"
+                        id="cardName"
+                        name="cardName"
+                        value={paymentData.cardName}
+                        onChange={handlePaymentInputChange}
+                        onBlur={handlePaymentBlur}
+                        placeholder="Enter cardholder name"
+                        className="card-input"
+                      />
+                    </div>
+                    {paymentErrors.cardName && (
+                      <span className="field-error">{paymentErrors.cardName}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="checkout-buttons">
+                  <button 
+                    className="checkout-back-button"
+                    onClick={handleBackToSubscription}
+                    disabled={isUpgrading}
+                  >
+                    Back
+                  </button>
+                  <button 
+                    className="checkout-complete-btn"
+                    onClick={handleCompletePayment}
+                    disabled={isUpgrading}
+                  >
+                    {isUpgrading ? 'Processing...' : 'Complete Payment'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Panel - Summary Overlay */}
+            <div className="checkout-visual-panel">
+              <img
+                src="https://www.traveltalktours.com/wp-content/uploads/2023/12/swapnil-bapat-sJ7pYyJFyuA-unsplash-1-scaled.jpg"
+                alt="Singapore Cityscape"
+                className="checkout-photo"
+              />
+              
+              {/* Payment Summary Overlay */}
+              <div className="payment-summary-overlay">
+                <div className="summary-box">
+                  <h3>Summary</h3>
+                  <div className="summary-plan">
+                    <span className="plan-price">
+                      ${getPlanPrice()}{selectedPlan === 'yearly' ? '/year' : '/month'}
+                    </span>
+                    <span className="plan-name">
+                      Premium Plan
+                    </span>
+                  </div>
+                  <div className="summary-breakdown">
+                    <div className="summary-item">
+                      <span>Subtotal:</span>
+                      <span>${getPlanPrice()}</span>
+                    </div>
+                    <div className="summary-item">
+                      <span>Tax:</span>
+                      <span>$0</span>
+                    </div>
+                    <div className="summary-divider"></div>
+                    <div className="summary-total">
+                      <span>Total:</span>
+                      <span>${getPlanPrice()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

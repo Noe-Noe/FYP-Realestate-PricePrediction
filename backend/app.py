@@ -10,11 +10,19 @@ import sys
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask_mail import Mail, Message
-from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature
+from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, Region, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature, FeaturesSection, FeaturesStep, UserProfile
 from sqlalchemy import text
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+
+# Import ML review filter
+try:
+    from ml_review_filter import get_ml_filter
+    ML_FILTER_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: ML review filter not available: {e}")
+    ML_FILTER_AVAILABLE = False
 
 # Load environment variables
 load_dotenv()
@@ -307,6 +315,11 @@ def register():
     if not data or not data.get('email') or not data.get('password') or not data.get('full_name'):
         return jsonify({'error': 'Missing required fields'}), 400
     
+    # Validate password length
+    password = data.get('password', '')
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters long'}), 400
+    
     # Check if user already exists
     if User.query.filter_by(email=data['email']).first():
         return jsonify({'error': 'User already exists'}), 409
@@ -318,7 +331,7 @@ def register():
         phone_number=data.get('phone_number'),
         user_type=data.get('user_type', 'free')
     )
-    user.set_password(data['password'])
+    user.set_password(password)
     
     try:
         db.session.add(user)
@@ -478,7 +491,19 @@ def verify_otp():
 @app.route('/api/properties', methods=['GET'])
 def get_properties():
     try:
-        properties = Property.query.filter_by(status='active').all()
+        # Get query parameters for pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 8, type=int)
+        
+        # Query active properties with pagination
+        query = Property.query.filter_by(status='active')
+        
+        # Pagination
+        pagination = query.order_by(Property.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        properties = pagination.items
         property_list = []
         
         for prop in properties:
@@ -513,10 +538,139 @@ def get_properties():
             }
             property_list.append(property_data)
         
-        return jsonify({'properties': property_list}), 200
+        return jsonify({
+            'properties': property_list,
+            'total': pagination.total,
+            'page': page,
+            'per_page': per_page,
+            'pages': pagination.pages
+        }), 200
     except Exception as e:
         print(f"Error fetching properties: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to fetch properties'}), 500
+
+# Filter properties by nearby amenities
+@app.route('/api/properties/filter-by-amenities', methods=['POST'])
+def filter_properties_by_amenities():
+    """
+    Filter properties based on proximity to selected amenities.
+    Uses Google Maps Places API to find nearby amenities and returns property IDs.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+        
+        amenity_types = data.get('amenity_types', [])
+        radius = data.get('radius', 1000)  # Default 1km in meters
+        
+        if not amenity_types or len(amenity_types) == 0:
+            # If no amenities selected, return all active property IDs
+            all_properties = Property.query.filter_by(status='active').all()
+            return jsonify({
+                'property_ids': [prop.id for prop in all_properties],
+                'count': len(all_properties)
+            }), 200
+        
+        # Map amenity types to Google Places API types
+        places_type_mapping = {
+            'school': 'school',
+            'hospital': 'hospital',
+            'supermarket': 'supermarket',
+            'restaurant': 'restaurant',
+            'cafe': 'cafe',
+            'bank': 'bank',
+            'atm': 'atm',
+            'shopping_mall': 'shopping_mall',
+            'bus_station': 'bus_station',
+            'subway_station': 'subway_station',
+            'gym': 'gym',
+            'pharmacy': 'pharmacy',
+            'park': 'park'
+        }
+        
+        # Get all active properties with coordinates
+        properties = Property.query.filter_by(status='active').filter(
+            Property.latitude.isnot(None),
+            Property.longitude.isnot(None)
+        ).all()
+        
+        if not properties:
+            return jsonify({
+                'property_ids': [],
+                'count': 0,
+                'message': 'No properties with coordinates found'
+            }), 200
+        
+        # For each amenity type, find properties that have nearby amenities
+        # Since we don't have Google Maps API in backend, we'll use a simpler approach:
+        # For now, return properties that have latitude/longitude (real implementation would use Places API)
+        matching_property_ids = set()
+        
+        try:
+            import requests
+            GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
+            api_key_configured = bool(GOOGLE_MAPS_API_KEY)  # Set based on whether key exists
+            
+            if GOOGLE_MAPS_API_KEY:
+                # Use Google Places API to find nearby amenities
+                for prop in properties:
+                    lat = float(prop.latitude)
+                    lng = float(prop.longitude)
+                    
+                    # Check each selected amenity type
+                    has_nearby_amenity = False
+                    for amenity_type in amenity_types:
+                        places_type = places_type_mapping.get(amenity_type, amenity_type)
+                        
+                        # Query Google Places API for nearby places
+                        places_url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+                        params = {
+                            'location': f'{lat},{lng}',
+                            'radius': radius,
+                            'type': places_type,
+                            'key': GOOGLE_MAPS_API_KEY
+                        }
+                        
+                        try:
+                            response = requests.get(places_url, params=params, timeout=5)
+                            if response.status_code == 200:
+                                places_data = response.json()
+                                if places_data.get('status') == 'OK' and len(places_data.get('results', [])) > 0:
+                                    has_nearby_amenity = True
+                                    break  # Found at least one nearby amenity of the selected types
+                        except Exception as e:
+                            print(f"Error checking nearby places for property {prop.id}: {e}")
+                            continue
+                    
+                    if has_nearby_amenity:
+                        matching_property_ids.add(prop.id)
+            else:
+                # Fallback: If no API key, return properties with coordinates (for testing)
+                # In production, this should return empty list
+                # For now, return all properties with coordinates to allow testing
+                matching_property_ids = {prop.id for prop in properties}
+                print("Warning: GOOGLE_MAPS_API_KEY not found. Returning all properties with coordinates (for testing). Please set GOOGLE_MAPS_API_KEY for accurate filtering.")
+        
+        except ImportError:
+            # If requests library is not available, return all properties with coordinates (for testing)
+            matching_property_ids = {prop.id for prop in properties}
+            api_key_configured = False
+            print("Warning: requests library not available. Returning all properties with coordinates (for testing). Please install requests: pip install requests")
+        
+        return jsonify({
+            'property_ids': list(matching_property_ids),
+            'count': len(matching_property_ids),
+            'api_key_configured': api_key_configured if 'api_key_configured' in locals() else bool(os.getenv('GOOGLE_MAPS_API_KEY'))
+        }), 200
+        
+    except Exception as e:
+        print(f"Error filtering properties by amenities: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to filter properties: {str(e)}'}), 500
 
 # Get property by ID
 @app.route('/api/properties/<int:property_id>', methods=['GET'])
@@ -795,6 +949,7 @@ def get_agents_by_region():
             return jsonify({'error': 'Address is required'}), 400
         
         target_address = data['address'].lower()
+        property_type = data.get('property_type')  # Get property type from request
         
         # Determine region based on address (using the same logic as nearby properties)
         target_region = None
@@ -886,6 +1041,30 @@ def get_agents_by_region():
                 'note': 'Agent regions table not available'
             }), 200
         
+        # Map property types to match specialization names
+        # Property types from price prediction: Office, Retail, Shop House, Single-user Factory, Multiple-user Factory, Warehouse, Business Parks
+        property_type_mapping = {
+            'office': 'Office',
+            'retail': 'Retail',
+            'shop house': 'Shop House',
+            'shophouse': 'Shop House',
+            'single-user factory': 'Single-user Factory',
+            'single-user-factory': 'Single-user Factory',
+            'singleuserfactory': 'Single-user Factory',
+            'multiple-user factory': 'Multiple-user Factory',
+            'multiple-user-factory': 'Multiple-user Factory',
+            'multipleuserfactory': 'Multiple-user Factory',
+            'warehouse': 'Warehouse',
+            'business parks': 'Business Parks',
+            'businessparks': 'Business Parks',
+            'business-park': 'Business Parks'
+        }
+        
+        # Normalize property type for matching
+        normalized_property_type = None
+        if property_type:
+            normalized_property_type = property_type_mapping.get(property_type.lower(), property_type)
+        
         for agent_region in agent_regions:
             try:
                 # Use agent_id instead of user_id based on your database structure
@@ -893,6 +1072,23 @@ def get_agents_by_region():
                 if user and user.user_type == 'agent':
                     # Get agent profile
                     agent_profile = AgentProfile.query.filter_by(user_id=user.id).first()
+                    
+                    # Filter by specializations if property_type is provided
+                    if normalized_property_type and agent_profile and agent_profile.specializations:
+                        # Check if agent has this property type in their specializations
+                        agent_specializations = agent_profile.specializations
+                        # Handle both list and JSON string formats
+                        if isinstance(agent_specializations, str):
+                            try:
+                                agent_specializations = json.loads(agent_specializations)
+                            except:
+                                agent_specializations = []
+                        elif agent_specializations is None:
+                            agent_specializations = []
+                        
+                        # Only include agent if they specialize in this property type
+                        if normalized_property_type not in agent_specializations:
+                            continue  # Skip this agent
                     
                     agent_data = {
                         'id': user.id,
@@ -1213,6 +1409,80 @@ def get_user_properties():
             'message': 'No properties available at the moment'
         }), 200
 
+# Get review statistics (overall rating, total reviews, star distribution)
+@app.route('/api/reviews/statistics', methods=['GET'])
+def get_review_statistics():
+    """Get overall review statistics including average rating, total reviews, and star distribution"""
+    try:
+        # Get overall statistics
+        stats_query = text("""
+            SELECT 
+                COUNT(*) as total_reviews,
+                AVG(rating)::numeric(3,2) as average_rating,
+                COUNT(CASE WHEN rating = 5 THEN 1 END) as five_stars,
+                COUNT(CASE WHEN rating = 4 THEN 1 END) as four_stars,
+                COUNT(CASE WHEN rating = 3 THEN 1 END) as three_stars,
+                COUNT(CASE WHEN rating = 2 THEN 1 END) as two_stars,
+                COUNT(CASE WHEN rating = 1 THEN 1 END) as one_star
+            FROM user_reviews
+            WHERE is_verified = TRUE
+        """)
+        
+        result = db.session.execute(stats_query).fetchone()
+        
+        if not result or result.total_reviews == 0:
+            return jsonify({
+                'total_reviews': 0,
+                'average_rating': 0,
+                'star_distribution': {
+                    '5': 0,
+                    '4': 0,
+                    '3': 0,
+                    '2': 0,
+                    '1': 0
+                },
+                'star_percentages': {
+                    '5': 0,
+                    '4': 0,
+                    '3': 0,
+                    '2': 0,
+                    '1': 0
+                }
+            }), 200
+        
+        total_reviews = result.total_reviews
+        average_rating = float(result.average_rating) if result.average_rating else 0
+        five_stars = result.five_stars or 0
+        four_stars = result.four_stars or 0
+        three_stars = result.three_stars or 0
+        two_stars = result.two_stars or 0
+        one_star = result.one_star or 0
+        
+        return jsonify({
+            'total_reviews': total_reviews,
+            'average_rating': round(average_rating, 1),
+            'star_distribution': {
+                '5': five_stars,
+                '4': four_stars,
+                '3': three_stars,
+                '2': two_stars,
+                '1': one_star
+            },
+            'star_percentages': {
+                '5': round((five_stars / total_reviews) * 100, 1),
+                '4': round((four_stars / total_reviews) * 100, 1),
+                '3': round((three_stars / total_reviews) * 100, 1),
+                '2': round((two_stars / total_reviews) * 100, 1),
+                '1': round((one_star / total_reviews) * 100, 1)
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error fetching review statistics: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to retrieve review statistics: {str(e)}'}), 500
+
 # Get published user reviews for feedback page
 @app.route('/api/feedback/reviews', methods=['GET'])
 def get_published_reviews():
@@ -1282,11 +1552,11 @@ def get_published_reviews():
         traceback.print_exc()
         return jsonify({'error': f'Failed to retrieve reviews: {str(e)}'}), 500
 
-# Submit new user feedback/review
-@app.route('/api/feedback/submit', methods=['POST'])
+# Submit new user review (rating + review text)
+@app.route('/api/review/submit', methods=['POST'])
 @require_auth
-def submit_feedback():
-    """Submit new user feedback/review"""
+def submit_review():
+    """Submit new user review with rating"""
     try:
         data = request.get_json()
         user_id = request.user['user_id']
@@ -1316,8 +1586,213 @@ def submit_feedback():
         db.session.commit()
         
         return jsonify({
-            'message': 'Feedback submitted successfully! It will be reviewed by our team before publishing.',
+            'message': 'Review submitted successfully!',
             'review_id': review_id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error submitting review: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to submit review: {str(e)}'}), 500
+
+# Get user's feedbacks
+@app.route('/api/feedback/my-feedbacks', methods=['GET'])
+@require_auth
+def get_my_feedbacks():
+    """Get current user's feedbacks/inquiries"""
+    try:
+        current_user = request.user
+        user_id = current_user['user_id']
+        
+        # Use raw SQL to check if admin_response columns exist and fetch them
+        from sqlalchemy import text
+        
+        try:
+            # Check if admin_response columns exist
+            check_query = text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'business_inquiries' AND column_name IN ('admin_response', 'admin_response_date')
+            """)
+            existing_columns = [row[0] for row in db.session.execute(check_query).fetchall()]
+            has_admin_response_col = 'admin_response' in existing_columns
+            has_admin_response_date_col = 'admin_response_date' in existing_columns
+            
+            if has_admin_response_col and has_admin_response_date_col:
+                # Query with admin_response columns
+                query = text("""
+                    SELECT id, inquiry_type, message, status, created_at, admin_response, admin_response_date
+                    FROM business_inquiries
+                    WHERE user_id = :user_id
+                    ORDER BY created_at DESC
+                """)
+                result = db.session.execute(query, {'user_id': user_id})
+                
+                feedbacks = []
+                for row in result:
+                    feedbacks.append({
+                        'id': row.id,
+                        'inquiry_type': row.inquiry_type,
+                        'message': row.message,
+                        'status': row.status,
+                        'created_at': row.created_at.isoformat() if row.created_at else None,
+                        'admin_response': row.admin_response if row.admin_response else None,
+                        'admin_response_date': row.admin_response_date.isoformat() if row.admin_response_date else None
+                    })
+            else:
+                # Fallback: use ORM without admin_response columns
+                inquiries = BusinessInquiry.query.filter_by(user_id=user_id).order_by(BusinessInquiry.created_at.desc()).all()
+                feedbacks = []
+                for inquiry in inquiries:
+                    feedbacks.append({
+                        'id': inquiry.id,
+                        'inquiry_type': inquiry.inquiry_type,
+                        'message': inquiry.message,
+                        'status': inquiry.status,
+                        'created_at': inquiry.created_at.isoformat() if inquiry.created_at else None,
+                        'admin_response': None,
+                        'admin_response_date': None
+                    })
+        except Exception as e:
+            print(f"Error checking/fetching admin_response columns: {e}")
+            # Fallback: use ORM without admin_response columns
+            inquiries = BusinessInquiry.query.filter_by(user_id=user_id).order_by(BusinessInquiry.created_at.desc()).all()
+            feedbacks = []
+            for inquiry in inquiries:
+                feedbacks.append({
+                    'id': inquiry.id,
+                    'inquiry_type': inquiry.inquiry_type,
+                    'message': inquiry.message,
+                    'status': inquiry.status,
+                    'created_at': inquiry.created_at.isoformat() if inquiry.created_at else None,
+                    'admin_response': None,
+                    'admin_response_date': None
+                })
+        
+        return jsonify({
+            'feedbacks': feedbacks
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting user feedbacks: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to get feedbacks: {str(e)}'}), 500
+
+# Submit new user feedback (business inquiry - feature request, bug report, general feedback)
+@app.route('/api/feedback/submit', methods=['POST'])
+@require_auth
+def submit_feedback():
+    """Submit new user feedback/inquiry"""
+    try:
+        data = request.get_json()
+        current_user = request.user
+        user_id = current_user['user_id']
+        user = User.query.get(user_id)
+        
+        if not data or not data.get('inquiry_type') or not data.get('message'):
+            return jsonify({'error': 'Feedback type and message are required'}), 400
+        
+        # Validate that the inquiry_type exists and is active in feedback_form_types
+        inquiry_type = data['inquiry_type']
+        try:
+            from sqlalchemy import text
+            # First, try to remove the CHECK constraint if it exists (to allow dynamic types)
+            try:
+                alter_query = text("""
+                    ALTER TABLE business_inquiries 
+                    DROP CONSTRAINT IF EXISTS business_inquiries_inquiry_type_check
+                """)
+                db.session.execute(alter_query)
+                db.session.commit()
+                print("Removed restrictive CHECK constraint on inquiry_type to allow dynamic feedback types")
+            except Exception as alter_error:
+                # Constraint might not exist or have different name, try alternative
+                try:
+                    # PostgreSQL might name it differently
+                    alter_query2 = text("""
+                        DO $$ 
+                        BEGIN
+                            IF EXISTS (
+                                SELECT 1 FROM pg_constraint 
+                                WHERE conname LIKE '%inquiry_type%check%'
+                                AND conrelid = 'business_inquiries'::regclass
+                            ) THEN
+                                EXECUTE 'ALTER TABLE business_inquiries DROP CONSTRAINT ' || 
+                                    (SELECT conname FROM pg_constraint 
+                                     WHERE conname LIKE '%inquiry_type%check%' 
+                                     AND conrelid = 'business_inquiries'::regclass LIMIT 1);
+                            END IF;
+                        END $$;
+                    """)
+                    db.session.execute(alter_query2)
+                    db.session.commit()
+                except:
+                    pass  # If constraint removal fails, continue anyway
+            
+            # Validate against feedback_form_types table
+            try:
+                type_check_query = text("""
+                    SELECT id, name, value, status 
+                    FROM feedback_form_types 
+                    WHERE value = :value AND status = 'active'
+                """)
+                type_result = db.session.execute(type_check_query, {'value': inquiry_type}).fetchone()
+                
+                # If type not found in database, check if it's a legacy allowed type
+                if not type_result:
+                    # Check if feedback_form_types table has any entries (might be empty)
+                    table_check = text("SELECT COUNT(*) FROM feedback_form_types")
+                    type_count = db.session.execute(table_check).scalar()
+                    
+                    if type_count == 0:
+                        # Table exists but empty, allow legacy types
+                        legacy_types = ['property_viewing', 'price_quote', 'general', 'support']
+                        if inquiry_type not in legacy_types:
+                            return jsonify({
+                                'error': f'Invalid feedback type: {inquiry_type}. Please select a valid type from the dropdown.'
+                            }), 400
+                    else:
+                        # Table has entries but this type is not active
+                        return jsonify({
+                            'error': f'Invalid or inactive feedback type: {inquiry_type}. Please select an active type from the dropdown.'
+                        }), 400
+            except Exception as table_error:
+                # If feedback_form_types table doesn't exist, allow legacy types
+                print(f"Note: feedback_form_types table may not exist: {table_error}")
+                legacy_types = ['property_viewing', 'price_quote', 'general', 'support']
+                if inquiry_type not in legacy_types:
+                    return jsonify({
+                        'error': f'Invalid feedback type: {inquiry_type}. Please select a valid type from the dropdown.'
+                    }), 400
+        except Exception as type_check_error:
+            # If validation fails completely, still try to submit (database will validate)
+            print(f"Warning: Could not validate feedback type {inquiry_type}: {type_check_error}")
+        
+        # Get user information
+        name = user.full_name if user else data.get('name', 'User')
+        email = user.email if user else data.get('email', '')
+        phone = user.phone_number if user else data.get('phone', '')
+        
+        # Create new business inquiry - set status to 'in_progress' for not yet responded feedback
+        new_inquiry = BusinessInquiry(
+            user_id=user_id,
+            name=name,
+            email=email,
+            phone=phone,
+            inquiry_type=inquiry_type,
+            message=data['message'],
+            status='in_progress'
+        )
+        
+        db.session.add(new_inquiry)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Feedback submitted successfully! Our team will review it and get back to you.',
+            'inquiry_id': new_inquiry.id
         }), 201
         
     except Exception as e:
@@ -1657,6 +2132,8 @@ def update_profile():
                 agent_profile.company_phone = agent_info['company_phone']
             if 'company_email' in agent_info:
                 agent_profile.company_email = agent_info['company_email']
+            if 'specializations' in agent_info:
+                agent_profile.specializations = agent_info['specializations']
         
         db.session.commit()
         
@@ -1679,6 +2156,7 @@ def update_profile():
                 'company_name': agent_profile.company_name,
                 'company_phone': agent_profile.company_phone if hasattr(agent_profile, 'company_phone') else None,
                 'company_email': agent_profile.company_email if hasattr(agent_profile, 'company_email') else None,
+                'specializations': agent_profile.specializations if agent_profile.specializations else [],
                 'license_picture_url': agent_profile.license_picture_url if hasattr(agent_profile, 'license_picture_url') else None
             }
         
@@ -1711,9 +2189,14 @@ def change_password():
     if not user.check_password(data['current_password']):
         return jsonify({'error': 'Current password is incorrect'}), 400
     
+    # Validate new password length
+    new_password = data.get('new_password', '')
+    if len(new_password) < 8:
+        return jsonify({'error': 'New password must be at least 8 characters long'}), 400
+    
     try:
         # Set new password
-        user.set_password(data['new_password'])
+        user.set_password(new_password)
         db.session.commit()
         
         return jsonify({'message': 'Password changed successfully'}), 200
@@ -2227,6 +2710,10 @@ def reset_password():
         
         return jsonify({'error': 'Invalid recovery code'}), 400
     
+    # Validate new password length
+    if len(new_password) < 8:
+        return jsonify({'error': 'New password must be at least 8 characters long'}), 400
+    
     # OTP is valid, reset password
     user = User.query.filter_by(email=email).first()
     if not user:
@@ -2286,7 +2773,7 @@ def get_admin_metrics():
         
         # Count total feedback/reviews (handle case where table might not exist)
         try:
-            total_feedback = db.session.execute(text('SELECT COUNT(*) FROM user_reviews')).scalar()
+            total_feedback = db.session.execute(text('SELECT COUNT(*) FROM business_inquiries')).scalar()
             print(f"Total feedback: {total_feedback}")
         except Exception as e:
             print(f"Error counting feedback: {e}")
@@ -2498,23 +2985,13 @@ def deactivate_own_account():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        # Mark account as inactive and clear sensitive data
-        # This allows the same email to be used for new signups
+        # Deactivate user (same as admin deactivation)
         user.is_active = False
-        
-        # Validate and set subscription status
-        new_status = 'inactive'
-        if not validate_subscription_status(new_status):
-            return jsonify({'error': 'Invalid subscription status'}), 400
-        user.subscription_status = new_status
-        
-        user.email = f"deactivated_{user.id}_{int(time.time())}@deactivated.com"
-        user.password_hash = "deactivated"
-        user.full_name = "Deactivated User"
+        user.subscription_status = 'inactive'
         db.session.commit()
         
         return jsonify({
-            'message': 'Account deactivated successfully. You can sign up again with the same email.',
+            'message': 'Account deactivated successfully',
             'user_id': current_user['user_id'],
             'status': 'inactive'
         }), 200
@@ -2532,6 +3009,158 @@ def deactivate_own_account():
             return jsonify({'error': 'Cannot deactivate account due to existing data. Please contact support.'}), 400
         else:
             return jsonify({'error': 'Failed to deactivate account'}), 500
+
+# Admin: Get all properties (including inactive)
+@app.route('/api/admin/properties', methods=['GET'])
+@require_auth
+def get_all_properties_admin():
+    """Get all properties for admin management"""
+    try:
+        # Verify admin access
+        current_user = request.user
+        if current_user['user_type'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        # Get query parameters for pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        
+        # Get all properties (not filtered by status)
+        query = Property.query
+        
+        # Pagination
+        pagination = query.order_by(Property.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        properties = pagination.items
+        property_list = []
+        
+        for prop in properties:
+            # Get agent information
+            agent = User.query.get(prop.agent_id)
+            agent_name = agent.full_name if agent else 'Unknown Agent'
+            agent_email = agent.email if agent else 'N/A'
+            
+            # Get agent profile for additional info
+            agent_profile = None
+            if agent:
+                agent_profile = AgentProfile.query.filter_by(user_id=agent.id).first()
+            
+            property_data = {
+                'id': prop.id,
+                'title': prop.title,
+                'description': prop.description,
+                'property_type': prop.property_type,
+                'address': prop.address,
+                'street_address': prop.street_address,
+                'city': prop.city,
+                'state': prop.state,
+                'zip_code': prop.zip_code,
+                'size_sqft': float(prop.size_sqft),
+                'floors': prop.floors,
+                'year_built': prop.year_built,
+                'zoning': prop.zoning,
+                'parking_spaces': prop.parking_spaces,
+                'asking_price': float(prop.asking_price),
+                'price_type': prop.price_type,
+                'status': prop.status,
+                'latitude': float(prop.latitude) if prop.latitude else None,
+                'longitude': float(prop.longitude) if prop.longitude else None,
+                'created_at': prop.created_at.isoformat() if prop.created_at else None,
+                'updated_at': prop.updated_at.isoformat() if prop.updated_at else None,
+                'agent_id': prop.agent_id,
+                'agent_name': agent_name,
+                'agent_email': agent_email,
+                'agent_license': agent_profile.license_number if agent_profile else None,
+                'agent_company': agent_profile.company_name if agent_profile else None
+            }
+            property_list.append(property_data)
+        
+        # Calculate total statistics (from all properties, not just current page)
+        total_active = Property.query.filter_by(status='active').count()
+        total_pending = Property.query.filter_by(status='pending').count()
+        total_sold = Property.query.filter_by(status='sold').count()
+        total_under_contract = Property.query.filter_by(status='under-contract').count()
+        
+        return jsonify({
+            'properties': property_list,
+            'total': pagination.total,
+            'page': page,
+            'per_page': per_page,
+            'pages': pagination.pages,
+            'statistics': {
+                'total_active': total_active,
+                'total_pending': total_pending,
+                'total_sold': total_sold,
+                'total_under_contract': total_under_contract
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error fetching properties for admin: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to fetch properties'}), 500
+
+# Admin: Delete property
+@app.route('/api/admin/properties/<int:property_id>', methods=['DELETE'])
+@require_auth
+def delete_property_admin(property_id):
+    """Delete a property (admin only)"""
+    try:
+        # Verify admin access
+        current_user = request.user
+        if current_user['user_type'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        # Get property
+        property = Property.query.get(property_id)
+        if not property:
+            return jsonify({'error': 'Property not found'}), 404
+        
+        # Delete related records first to avoid foreign key constraint errors
+        # Delete property views
+        PropertyView.query.filter_by(property_id=property_id).delete()
+        
+        # Delete property amenities
+        PropertyAmenity.query.filter_by(property_id=property_id).delete()
+        
+        # Delete property images
+        PropertyImage.query.filter_by(property_id=property_id).delete()
+        
+        # Delete property bookmarks (if any bookmark references this property)
+        # Note: Bookmarks store property_id in reference_id when bookmark_type is 'property'
+        Bookmark.query.filter_by(bookmark_type='property', reference_id=property_id).delete()
+        
+        # Now delete the property itself
+        db.session.delete(property)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Property deleted successfully',
+            'property_id': property_id
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting property: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Provide more specific error messages
+        error_msg = str(e)
+        if 'foreign key' in error_msg.lower() or 'constraint' in error_msg.lower():
+            return jsonify({
+                'error': 'Cannot delete property: It is referenced by other records (e.g., bookings, inquiries, or reviews). Please remove related data first.'
+            }), 400
+        elif 'not found' in error_msg.lower():
+            return jsonify({'error': 'Property not found'}), 404
+        else:
+            # Return more informative error message
+            return jsonify({
+                'error': f'Failed to delete property: {error_msg}'
+            }), 500
 
 # User completely deletes their own account (hard delete)
 @app.route('/api/user/delete-account', methods=['POST'])
@@ -2608,6 +3237,63 @@ def delete_own_account():
             return jsonify({'error': 'Failed to delete account'}), 500
 
 # Suspend user account
+# Admin: Update user type
+@app.route('/api/admin/users/<int:user_id>', methods=['PUT'])
+@require_auth
+def update_user(user_id):
+    """Update user information (e.g., user_type)"""
+    try:
+        # Get current user to verify admin status
+        current_user = request.user
+        if current_user['user_type'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        # Get user by ID
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Check if trying to modify own account (admin should be able to, but be careful)
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request data is required'}), 400
+        
+        # Update user_type if provided
+        if 'user_type' in data:
+            new_user_type = data['user_type'].lower()
+            
+            # Validate user_type
+            if not validate_user_type(new_user_type):
+                return jsonify({'error': f'Invalid user_type. Must be one of: free, premium, agent, admin'}), 400
+            
+            # Prevent changing own user_type to non-admin (unless they want to)
+            if user.id == current_user['user_id'] and new_user_type != 'admin':
+                return jsonify({'error': 'Cannot change your own user type from admin'}), 400
+            
+            # Update user type
+            user.user_type = new_user_type
+            db.session.commit()
+        
+        # Return updated user data
+        return jsonify({
+            'message': 'User updated successfully',
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'full_name': user.full_name,
+                'user_type': user.user_type,
+                'subscription_status': user.subscription_status,
+                'is_active': user.is_active
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating user: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to update user: {str(e)}'}), 500
+
 @app.route('/api/admin/users/<int:user_id>/suspend', methods=['POST'])
 @require_auth
 def suspend_user(user_id):
@@ -2736,19 +3422,25 @@ def admin_delete_user(user_id):
         else:
             return jsonify({'error': 'Failed to delete user'}), 500
 
-# Get all feedback for admin review
-@app.route('/api/admin/feedback', methods=['GET'])
+# Get all reviews (user_reviews) for admin management
+@app.route('/api/admin/reviews', methods=['GET'])
 @require_auth
-def get_all_feedback():
+def get_all_reviews():
+    """Get all user reviews for admin management with optional ML filtering"""
     try:
         # Get current user to verify admin status
         current_user = request.user
         if current_user['user_type'] != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
         
-        # Get all feedback with pagination
+        # Get all reviews with pagination
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
+        
+        # Get ML filter options
+        filter_legit = request.args.get('filter_legit', 'false').lower() == 'true'
+        include_ml_predictions = request.args.get('include_ml', 'true').lower() == 'true'
+        min_confidence = float(request.args.get('min_confidence', 0.7))
         
         # Query all reviews with user information
         query = text("""
@@ -2777,16 +3469,214 @@ def get_all_feedback():
                 'user_type': row.user_type
             })
         
+        # Apply ML filtering if requested and available
+        reviews_to_filter = all_reviews
+        if ML_FILTER_AVAILABLE and (filter_legit or include_ml_predictions):
+            try:
+                ml_filter = get_ml_filter()
+                if ml_filter and ml_filter.model:
+                    legit_reviews, all_with_predictions = ml_filter.filter_legit_reviews(
+                        all_reviews, 
+                        min_confidence=min_confidence
+                    )
+                    
+                    # Add ML predictions to all reviews if requested
+                    if include_ml_predictions:
+                        all_reviews = all_with_predictions
+                    
+                    # Filter to only legit reviews if requested
+                    if filter_legit:
+                        reviews_to_filter = legit_reviews
+                    else:
+                        reviews_to_filter = all_with_predictions
+            except Exception as ml_error:
+                print(f"ML filtering error (continuing without filter): {ml_error}")
+                # Continue without ML filtering if there's an error
+        
         # Simple pagination
         start_idx = (page - 1) * per_page
         end_idx = start_idx + per_page
-        paginated_reviews = all_reviews[start_idx:end_idx]
+        paginated_reviews = reviews_to_filter[start_idx:end_idx]
+        
+        # Calculate total statistics from all reviews (not just current page)
+        # Count by rating
+        rating_stats = {
+            5: 0,
+            4: 0,
+            3: 0,
+            2: 0,
+            1: 0
+        }
+        for review in reviews_to_filter:
+            if review.get('rating') and 1 <= review['rating'] <= 5:
+                rating_stats[review['rating']] += 1
         
         return jsonify({
-            'feedback': paginated_reviews,
-            'total': len(all_reviews),
+            'reviews': paginated_reviews,
+            'total': len(reviews_to_filter),
             'current_page': page,
-            'per_page': per_page
+            'per_page': per_page,
+            'ml_enabled': ML_FILTER_AVAILABLE and include_ml_predictions,
+            'filtered': filter_legit,
+            'statistics': {
+                'rating_distribution': rating_stats
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting reviews: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to get reviews'}), 500
+
+# Get all feedback (business inquiries) for admin review
+@app.route('/api/admin/feedback', methods=['GET'])
+@require_auth
+def get_all_feedback():
+    try:
+        # Get current user to verify admin status
+        current_user = request.user
+        if current_user['user_type'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        # Get all feedback with pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        
+        # Get ML filter options
+        filter_legit = request.args.get('filter_legit', 'false').lower() == 'true'
+        include_ml_predictions = request.args.get('include_ml', 'true').lower() == 'true'
+        min_confidence = float(request.args.get('min_confidence', 0.7))
+        
+        # Query all business inquiries (feedback) with user information
+        # First check if admin_response columns exist
+        try:
+            # Try to check if columns exist
+            check_query = text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'business_inquiries' AND column_name IN ('admin_response', 'admin_response_date')
+            """)
+            existing_columns = [row[0] for row in db.session.execute(check_query).fetchall()]
+            has_admin_response = 'admin_response' in existing_columns
+            has_admin_response_date = 'admin_response_date' in existing_columns
+            
+            # Build query based on column existence
+            if has_admin_response and has_admin_response_date:
+                query = text("""
+                    SELECT bi.id, bi.message, bi.inquiry_type, bi.status, bi.created_at,
+                           bi.name, bi.email, bi.phone,
+                           bi.admin_response, bi.admin_response_date,
+                           u.full_name, u.email as user_email, u.user_type
+                    FROM business_inquiries bi
+                    LEFT JOIN users u ON bi.user_id = u.id
+                    ORDER BY bi.created_at DESC
+                """)
+            else:
+                # Columns don't exist yet, query without them
+                query = text("""
+                    SELECT bi.id, bi.message, bi.inquiry_type, bi.status, bi.created_at,
+                           bi.name, bi.email, bi.phone,
+                           u.full_name, u.email as user_email, u.user_type
+                    FROM business_inquiries bi
+                    LEFT JOIN users u ON bi.user_id = u.id
+                    ORDER BY bi.created_at DESC
+                """)
+        except:
+            # If check fails, query without admin_response columns
+            query = text("""
+                SELECT bi.id, bi.message, bi.inquiry_type, bi.status, bi.created_at,
+                       bi.name, bi.email, bi.phone,
+                       u.full_name, u.email as user_email, u.user_type
+                FROM business_inquiries bi
+                LEFT JOIN users u ON bi.user_id = u.id
+                ORDER BY bi.created_at DESC
+            """)
+            has_admin_response = False
+            has_admin_response_date = False
+        
+        result = db.session.execute(query)
+        all_feedbacks = []
+        
+        for row in result:
+            # Use user's name/email if available, otherwise use inquiry name/email
+            user_name = row.full_name if row.full_name else row.name
+            user_email = row.user_email if row.user_email else row.email
+            
+            # Try to get admin_response if columns exist and are in result
+            admin_response = None
+            admin_response_date = None
+            try:
+                if has_admin_response and hasattr(row, 'admin_response'):
+                    admin_response = row.admin_response  # Include even if None or empty string
+                if has_admin_response_date and hasattr(row, 'admin_response_date') and row.admin_response_date:
+                    admin_response_date = row.admin_response_date.isoformat()
+            except:
+                pass
+            
+            all_feedbacks.append({
+                'id': row.id,
+                'message': row.message,
+                'inquiry_type': row.inquiry_type,
+                'status': row.status,
+                'created_at': row.created_at.isoformat() if row.created_at else None,
+                'user_name': user_name,
+                'user_email': user_email,
+                'phone': row.phone,
+                'user_type': row.user_type if row.user_type else 'guest',
+                'admin_response': admin_response,
+                'admin_response_date': admin_response_date
+            })
+        
+        # Apply ML filtering if requested and available
+        feedbacks_to_filter = all_feedbacks
+        if ML_FILTER_AVAILABLE and (filter_legit or include_ml_predictions):
+            try:
+                ml_filter = get_ml_filter()
+                if ml_filter and ml_filter.model:
+                    legit_feedbacks, all_with_predictions = ml_filter.filter_legit_reviews(
+                        all_feedbacks, 
+                        min_confidence=min_confidence
+                    )
+                    
+                    # Add ML predictions to all feedbacks if requested
+                    if include_ml_predictions:
+                        all_feedbacks = all_with_predictions
+                    
+                    # Filter to only legit feedbacks if requested
+                    if filter_legit:
+                        feedbacks_to_filter = legit_feedbacks
+                    else:
+                        feedbacks_to_filter = all_with_predictions
+            except Exception as ml_error:
+                print(f"ML filtering error (continuing without filter): {ml_error}")
+                # Continue without ML filtering if there's an error
+        
+        # Simple pagination
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_feedbacks = feedbacks_to_filter[start_idx:end_idx]
+        
+        # Calculate total statistics from all feedback (not just current page)
+        total_responded = 0
+        total_not_responded = 0
+        for feedback in feedbacks_to_filter:
+            if feedback.get('admin_response'):
+                total_responded += 1
+            else:
+                total_not_responded += 1
+        
+        return jsonify({
+            'feedback': paginated_feedbacks,
+            'total': len(feedbacks_to_filter),
+            'current_page': page,
+            'per_page': per_page,
+            'ml_enabled': ML_FILTER_AVAILABLE and include_ml_predictions,
+            'filtered': filter_legit,
+            'statistics': {
+                'total_responded': total_responded,
+                'total_not_responded': total_not_responded
+            }
         }), 200
         
     except Exception as e:
@@ -2795,10 +3685,294 @@ def get_all_feedback():
         traceback.print_exc()
         return jsonify({'error': 'Failed to get feedback'}), 500
 
-# Verify/publish feedback (make it public)
+# Get all feedback form types (for user feedback form)
+@app.route('/api/feedback/form-types', methods=['GET'])
+def get_feedback_form_types():
+    """Get all active feedback form types for the user feedback form"""
+    try:
+        from sqlalchemy import text
+        # Check if table exists first
+        try:
+            query = text("""
+                SELECT id, name, value, status, display_order
+                FROM feedback_form_types
+                WHERE status = 'active'
+                ORDER BY display_order ASC, name ASC
+            """)
+            result = db.session.execute(query)
+            types = []
+            for row in result:
+                types.append({
+                    'id': row.id,
+                    'name': row.name,
+                    'value': row.value,
+                    'status': row.status,
+                    'display_order': row.display_order
+                })
+            
+            # If no types found in database, return default types
+            if not types:
+                return jsonify({
+                    'types': [
+                        {'id': 1, 'name': 'General Feedback', 'value': 'general', 'status': 'active', 'display_order': 0},
+                        {'id': 2, 'name': 'Support Request', 'value': 'support', 'status': 'active', 'display_order': 1},
+                        {'id': 3, 'name': 'Property Viewing Inquiry', 'value': 'property_viewing', 'status': 'active', 'display_order': 2},
+                        {'id': 4, 'name': 'Price Quote Request', 'value': 'price_quote', 'status': 'active', 'display_order': 3}
+                    ]
+                }), 200
+            
+            return jsonify({'types': types}), 200
+        except Exception as table_error:
+            # Table doesn't exist yet, return default types
+            print(f"Feedback form types table not found: {table_error}")
+            return jsonify({
+                'types': [
+                    {'id': 1, 'name': 'General Feedback', 'value': 'general', 'status': 'active', 'display_order': 0},
+                    {'id': 2, 'name': 'Support Request', 'value': 'support', 'status': 'active', 'display_order': 1},
+                    {'id': 3, 'name': 'Property Viewing Inquiry', 'value': 'property_viewing', 'status': 'active', 'display_order': 2},
+                    {'id': 4, 'name': 'Price Quote Request', 'value': 'price_quote', 'status': 'active', 'display_order': 3}
+                ]
+            }), 200
+    except Exception as e:
+        print(f"Error getting feedback form types: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to get feedback form types'}), 500
+
+# Admin: Get all feedback form types (including inactive)
+@app.route('/api/admin/feedback/form-types', methods=['GET'])
+@require_auth
+def get_all_feedback_form_types():
+    """Get all feedback form types for admin management"""
+    try:
+        current_user = request.user
+        if current_user['user_type'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        from sqlalchemy import text
+        try:
+            query = text("""
+                SELECT id, name, value, status, display_order, created_at, updated_at
+                FROM feedback_form_types
+                ORDER BY display_order ASC, name ASC
+            """)
+            result = db.session.execute(query)
+            types = []
+            for row in result:
+                types.append({
+                    'id': row.id,
+                    'name': row.name,
+                    'value': row.value,
+                    'status': row.status,
+                    'display_order': row.display_order,
+                    'created_at': row.created_at.isoformat() if row.created_at else None,
+                    'updated_at': row.updated_at.isoformat() if row.updated_at else None
+                })
+            
+            # If no types found, return empty array
+            return jsonify({'types': types}), 200
+        except Exception as table_error:
+            # Table doesn't exist yet, return empty array
+            print(f"Feedback form types table not found: {table_error}")
+            return jsonify({'types': []}), 200
+    except Exception as e:
+        print(f"Error getting all feedback form types: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to get feedback form types'}), 500
+
+# Admin: Create feedback form type
+@app.route('/api/admin/feedback/form-types', methods=['POST'])
+@require_auth
+def create_feedback_form_type():
+    """Create a new feedback form type"""
+    try:
+        current_user = request.user
+        if current_user['user_type'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        data = request.get_json()
+        if not data or not data.get('name') or not data.get('value'):
+            return jsonify({'error': 'Name and value are required'}), 400
+        
+        from sqlalchemy import text
+        
+        # Check if table exists, if not create it
+        try:
+            check_query = text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'feedback_form_types'
+                )
+            """)
+            table_exists = db.session.execute(check_query).scalar()
+            
+            if not table_exists:
+                # Create the table
+                create_table_query = text("""
+                    CREATE TABLE feedback_form_types (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(100) NOT NULL,
+                        value VARCHAR(50) UNIQUE NOT NULL,
+                        status VARCHAR(20) DEFAULT 'active',
+                        display_order INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                db.session.execute(create_table_query)
+                db.session.commit()
+                print("Created feedback_form_types table")
+        except Exception as check_error:
+            print(f"Error checking/creating table: {check_error}")
+            db.session.rollback()
+        
+        # Get max display_order
+        max_order_query = text("SELECT COALESCE(MAX(display_order), 0) FROM feedback_form_types")
+        max_order = db.session.execute(max_order_query).scalar() or 0
+        
+        # Insert new type
+        insert_query = text("""
+            INSERT INTO feedback_form_types (name, value, status, display_order)
+            VALUES (:name, :value, :status, :display_order)
+            RETURNING id, name, value, status, display_order, created_at, updated_at
+        """)
+        result = db.session.execute(insert_query, {
+            'name': data['name'],
+            'value': data['value'],
+            'status': data.get('status', 'active'),
+            'display_order': data.get('display_order', max_order + 1)
+        })
+        new_type = result.fetchone()
+        db.session.commit()
+        
+        return jsonify({
+            'type': {
+                'id': new_type.id,
+                'name': new_type.name,
+                'value': new_type.value,
+                'status': new_type.status,
+                'display_order': new_type.display_order,
+                'created_at': new_type.created_at.isoformat() if new_type.created_at else None,
+                'updated_at': new_type.updated_at.isoformat() if new_type.updated_at else None
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating feedback form type: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to create feedback form type: {str(e)}'}), 500
+
+# Admin: Update feedback form type
+@app.route('/api/admin/feedback/form-types/<int:type_id>', methods=['PUT'])
+@require_auth
+def update_feedback_form_type(type_id):
+    """Update a feedback form type"""
+    try:
+        current_user = request.user
+        if current_user['user_type'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request data is required'}), 400
+        
+        from sqlalchemy import text
+        
+        # Build update query dynamically
+        update_fields = []
+        params = {'type_id': type_id}
+        
+        if 'name' in data:
+            update_fields.append('name = :name')
+            params['name'] = data['name']
+        if 'value' in data:
+            update_fields.append('value = :value')
+            params['value'] = data['value']
+        if 'status' in data:
+            update_fields.append('status = :status')
+            params['status'] = data['status']
+        if 'display_order' in data:
+            update_fields.append('display_order = :display_order')
+            params['display_order'] = data['display_order']
+        
+        if not update_fields:
+            return jsonify({'error': 'No fields to update'}), 400
+        
+        update_fields.append('updated_at = CURRENT_TIMESTAMP')
+        
+        update_query = text(f"""
+            UPDATE feedback_form_types
+            SET {', '.join(update_fields)}
+            WHERE id = :type_id
+            RETURNING id, name, value, status, display_order, created_at, updated_at
+        """)
+        
+        result = db.session.execute(update_query, params)
+        updated_type = result.fetchone()
+        
+        if not updated_type:
+            return jsonify({'error': 'Feedback form type not found'}), 404
+        
+        db.session.commit()
+        
+        return jsonify({
+            'type': {
+                'id': updated_type.id,
+                'name': updated_type.name,
+                'value': updated_type.value,
+                'status': updated_type.status,
+                'display_order': updated_type.display_order,
+                'created_at': updated_type.created_at.isoformat() if updated_type.created_at else None,
+                'updated_at': updated_type.updated_at.isoformat() if updated_type.updated_at else None
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating feedback form type: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to update feedback form type: {str(e)}'}), 500
+
+# Admin: Delete feedback form type
+@app.route('/api/admin/feedback/form-types/<int:type_id>', methods=['DELETE'])
+@require_auth
+def delete_feedback_form_type(type_id):
+    """Delete a feedback form type"""
+    try:
+        current_user = request.user
+        if current_user['user_type'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        from sqlalchemy import text
+        
+        delete_query = text("""
+            DELETE FROM feedback_form_types
+            WHERE id = :type_id
+            RETURNING id
+        """)
+        
+        result = db.session.execute(delete_query, {'type_id': type_id})
+        deleted = result.fetchone()
+        
+        if not deleted:
+            return jsonify({'error': 'Feedback form type not found'}), 404
+        
+        db.session.commit()
+        return jsonify({'message': 'Feedback form type deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting feedback form type: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to delete feedback form type: {str(e)}'}), 500
+
+# Verify/publish review (make it public)
 @app.route('/api/admin/feedback/verify', methods=['POST'])
 @require_auth
 def verify_feedback():
+    """Verify/publish a review (works for user_reviews table)"""
     try:
         # Get current user to verify admin status
         current_user = request.user
@@ -2807,22 +3981,22 @@ def verify_feedback():
         
         data = request.get_json()
         if not data or not data.get('feedback_id'):
-            return jsonify({'error': 'Feedback ID is required'}), 400
+            return jsonify({'error': 'Review ID is required'}), 400
         
-        feedback_id = data['feedback_id']
+        review_id = data['feedback_id']
         
-        # Update the feedback verification status only (make it public)
+        # Update the review verification status (make it public)
         query = text("""
             UPDATE user_reviews 
             SET is_verified = TRUE
             WHERE id = :id
         """)
         db.session.execute(query, {
-            'id': feedback_id
+            'id': review_id
         })
         db.session.commit()
         
-        return jsonify({'message': 'Feedback verified and published successfully'}), 200
+        return jsonify({'message': 'Review verified and published successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
@@ -2831,10 +4005,11 @@ def verify_feedback():
         traceback.print_exc()
         return jsonify({'error': 'Failed to verify feedback'}), 500
 
-# Respond to feedback (send message to user)
+# Respond to feedback/review (send message to user)
 @app.route('/api/admin/feedback/respond', methods=['POST'])
 @require_auth
 def respond_to_feedback():
+    """Respond to either a review (user_reviews) or feedback (business_inquiries)"""
     try:
         # Get current user to verify admin status
         current_user = request.user
@@ -2847,22 +4022,62 @@ def respond_to_feedback():
         
         feedback_id = data['feedback_id']
         admin_response = data.get('admin_response', '')
+        feedback_type = data.get('type', 'review')  # Default to 'review' for backward compatibility
         
         if not admin_response.strip():
             return jsonify({'error': 'Response message is required'}), 400
         
-
-        # Add admin response to the feedback
-        query = text("""
-            UPDATE user_reviews 
-            SET admin_response = :admin_response,
-                admin_response_date = NOW()
-            WHERE id = :id
-        """)
-        db.session.execute(query, {
-            'id': feedback_id,
-            'admin_response': admin_response
-        })
+        if feedback_type == 'review':
+            # Add admin response to the review (user_reviews table)
+            query = text("""
+                UPDATE user_reviews 
+                SET admin_response = :admin_response,
+                    admin_response_date = NOW()
+                WHERE id = :id
+            """)
+            db.session.execute(query, {
+                'id': feedback_id,
+                'admin_response': admin_response
+            })
+        else:
+            # Add admin response to the feedback (business_inquiries table)
+            # First check if admin_response column exists
+            try:
+                # Check if columns exist
+                check_query = text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'business_inquiries' AND column_name = 'admin_response'
+                """)
+                result = db.session.execute(check_query).fetchone()
+                
+                # If columns don't exist, add them
+                if not result:
+                    try:
+                        db.session.execute(text("ALTER TABLE business_inquiries ADD COLUMN admin_response TEXT"))
+                        db.session.execute(text("ALTER TABLE business_inquiries ADD COLUMN admin_response_date TIMESTAMP"))
+                        db.session.commit()
+                        print("Added admin_response columns to business_inquiries table")
+                    except Exception as alter_error:
+                        print(f"Could not add admin_response columns: {alter_error}")
+                        db.session.rollback()
+                
+                # Update with admin_response - set status to 'resolved' to indicate it's been responded to
+                query = text("""
+                    UPDATE business_inquiries 
+                    SET admin_response = :admin_response,
+                        admin_response_date = NOW(),
+                        status = 'resolved'
+                    WHERE id = :id
+                """)
+                db.session.execute(query, {
+                    'id': feedback_id,
+                    'admin_response': admin_response
+                })
+            except Exception as e:
+                print(f"Error updating business_inquiries: {e}")
+                raise
+        
         db.session.commit()
         
         return jsonify({'message': 'Response sent successfully'}), 200
@@ -2874,7 +4089,7 @@ def respond_to_feedback():
         traceback.print_exc()
         return jsonify({'error': 'Failed to send response'}), 500
 
-# Get feedback by ID
+# Get feedback/review by ID (supports both user_reviews and business_inquiries)
 @app.route('/api/admin/feedback/<int:feedback_id>', methods=['GET'])
 @require_auth
 def get_feedback_by_id(feedback_id):
@@ -2883,42 +4098,160 @@ def get_feedback_by_id(feedback_id):
         if current_user['user_type'] != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
         
-        # Get feedback details with user information
-        query = text("""
-            SELECT 
-                ur.id,
-                ur.review_type,
-                ur.rating,
-                ur.review_text,
-                ur.review_date,
-                ur.is_verified,
-                ur.admin_response,
-                ur.admin_response_date,
-                u.full_name as user_name,
-                u.email as user_email
-            FROM user_reviews ur
-            JOIN users u ON ur.user_id = u.id
-            WHERE ur.id = :feedback_id
-        """)
+        # Check query parameter to determine type
+        feedback_type = request.args.get('type', 'review')  # Default to 'review' for backward compatibility
         
-        result = db.session.execute(query, {'feedback_id': feedback_id})
-        feedback = result.fetchone()
-        
-        if not feedback:
-            return jsonify({'error': 'Feedback not found'}), 404
-        
-        # Convert to dictionary
-        feedback_dict = {
-            'id': feedback.id,
-            'review_type': feedback.review_type,
-            'rating': feedback.rating,
-            'review_text': feedback.review_text,
-            'review_date': feedback.review_date.isoformat() if feedback.review_date else None,
-            'is_verified': feedback.is_verified,
-            'admin_response': feedback.admin_response,
-            'admin_response_date': feedback.admin_response_date.isoformat() if feedback.admin_response_date else None,
-            'user_name': feedback.user_name,
-            'user_email': feedback.user_email
+        if feedback_type == 'review':
+            # Get review details from user_reviews table
+            query = text("""
+                SELECT 
+                    ur.id,
+                    ur.review_type,
+                    ur.rating,
+                    ur.review_text,
+                    ur.review_date,
+                    ur.is_verified,
+                    ur.admin_response,
+                    ur.admin_response_date,
+                    u.full_name as user_name,
+                    u.email as user_email
+                FROM user_reviews ur
+                JOIN users u ON ur.user_id = u.id
+                WHERE ur.id = :feedback_id
+            """)
+            
+            result = db.session.execute(query, {'feedback_id': feedback_id})
+            feedback = result.fetchone()
+            
+            if not feedback:
+                return jsonify({'error': 'Review not found'}), 404
+            
+            # Convert to dictionary
+            feedback_dict = {
+                'id': feedback.id,
+                'review_type': feedback.review_type,
+                'rating': feedback.rating,
+                'review_text': feedback.review_text,
+                'review_date': feedback.review_date.isoformat() if feedback.review_date else None,
+                'created_at': feedback.review_date.isoformat() if feedback.review_date else None,
+                'is_verified': feedback.is_verified,
+                'admin_response': feedback.admin_response,
+                'admin_response_date': feedback.admin_response_date.isoformat() if feedback.admin_response_date else None,
+                'user_name': feedback.user_name,
+                'user_email': feedback.user_email,
+                'type': 'review'
+            }
+        else:
+            # Get feedback details from business_inquiries table
+            # Check if admin_response columns exist first
+            has_admin_response_col = False
+            has_admin_response_date_col = False
+            
+            try:
+                check_query = text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'business_inquiries' AND column_name IN ('admin_response', 'admin_response_date')
+                """)
+                existing_columns = [row[0] for row in db.session.execute(check_query).fetchall()]
+                has_admin_response_col = 'admin_response' in existing_columns
+                has_admin_response_date_col = 'admin_response_date' in existing_columns
+                
+                if has_admin_response_col and has_admin_response_date_col:
+                    query = text("""
+                        SELECT 
+                            bi.id,
+                            bi.inquiry_type,
+                            bi.message,
+                            bi.status,
+                            bi.created_at,
+                            bi.name,
+                            bi.email,
+                            bi.phone,
+                            u.full_name as user_name,
+                            u.email as user_email,
+                            bi.admin_response,
+                            bi.admin_response_date
+                        FROM business_inquiries bi
+                        LEFT JOIN users u ON bi.user_id = u.id
+                        WHERE bi.id = :feedback_id
+                    """)
+                else:
+                    query = text("""
+                        SELECT 
+                            bi.id,
+                            bi.inquiry_type,
+                            bi.message,
+                            bi.status,
+                            bi.created_at,
+                            bi.name,
+                            bi.email,
+                            bi.phone,
+                            u.full_name as user_name,
+                            u.email as user_email
+                        FROM business_inquiries bi
+                        LEFT JOIN users u ON bi.user_id = u.id
+                        WHERE bi.id = :feedback_id
+                    """)
+            except:
+                # If check fails, query without admin_response columns
+                query = text("""
+                    SELECT 
+                        bi.id,
+                        bi.inquiry_type,
+                        bi.message,
+                        bi.status,
+                        bi.created_at,
+                        bi.name,
+                        bi.email,
+                        bi.phone,
+                        u.full_name as user_name,
+                        u.email as user_email
+                    FROM business_inquiries bi
+                    LEFT JOIN users u ON bi.user_id = u.id
+                    WHERE bi.id = :feedback_id
+                """)
+            
+            result = db.session.execute(query, {'feedback_id': feedback_id})
+            feedback = result.fetchone()
+            
+            if not feedback:
+                return jsonify({'error': 'Feedback not found'}), 404
+            
+            # Use user's name/email if available, otherwise use inquiry name/email
+            user_name = feedback.user_name if feedback.user_name else feedback.name
+            user_email = feedback.user_email if feedback.user_email else feedback.email
+            
+            # Try to get admin_response and admin_response_date from the result
+            admin_response = None
+            admin_response_date = None
+            try:
+                # Try accessing as attribute (if column exists in SELECT)
+                if has_admin_response_col and hasattr(feedback, 'admin_response') and feedback.admin_response:
+                    admin_response = feedback.admin_response
+                if has_admin_response_date_col and hasattr(feedback, 'admin_response_date') and feedback.admin_response_date:
+                    admin_response_date = feedback.admin_response_date.isoformat()
+            except:
+                # Column might not exist in database
+                pass
+            
+            # Convert to dictionary
+            feedback_dict = {
+                'id': feedback.id,
+                'inquiry_type': feedback.inquiry_type,
+                'message': feedback.message,
+                'review_text': feedback.message,  # For compatibility with ViewFeedback component
+                'status': feedback.status,
+                'created_at': feedback.created_at.isoformat() if feedback.created_at else None,
+                'review_date': feedback.created_at.isoformat() if feedback.created_at else None,
+                'user_name': user_name,
+                'user_email': user_email,
+                'phone': feedback.phone,
+                'rating': None,  # Business inquiries don't have ratings
+                'is_verified': False,  # Business inquiries don't have verification
+                'admin_response': admin_response,
+                'admin_response_date': admin_response_date,
+                'type': 'feedback'
         }
         
         return jsonify(feedback_dict), 200
@@ -3197,22 +4530,25 @@ def complete_user_onboarding():
     """Mark user as having completed first-time onboarding"""
     try:
         current_user = request.user
-        data = request.get_json()
+        user_id = current_user['user_id']
         
         # Update user's first_time_user status
-        user = User.query.get(current_user['user_id'])
+        user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
         user.first_time_user = False
         db.session.commit()
         
+        print(f"Successfully completed user onboarding for user {user_id}")
         return jsonify({'message': 'Onboarding completed successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
+        import traceback
         print(f"Error completing user onboarding: {e}")
-        return jsonify({'error': 'Failed to complete onboarding'}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to complete onboarding: {str(e)}'}), 500
 
 @app.route('/api/onboarding/complete-agent', methods=['POST'])
 @require_auth
@@ -3220,25 +4556,40 @@ def complete_agent_onboarding():
     """Mark agent as having completed first-time region selection"""
     try:
         current_user = request.user
-        data = request.get_json()
+        user_id = current_user['user_id']
         
         # Verify user is an agent
-        user = User.query.get(current_user['user_id'])
-        if not user or user.user_type != 'agent':
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if user.user_type != 'agent':
             return jsonify({'error': 'User is not an agent'}), 403
         
-        # Update agent profile's first_time_agent status
-        agent_profile = AgentProfile.query.filter_by(user_id=current_user['user_id']).first()
-        if agent_profile:
-            agent_profile.first_time_agent = False
-            db.session.commit()
+        # Get or create agent profile
+        agent_profile = AgentProfile.query.filter_by(user_id=user_id).first()
+        if not agent_profile:
+            # Create agent profile if it doesn't exist
+            print(f"Agent profile not found for user {user_id}, creating one...")
+            agent_profile = AgentProfile(
+                user_id=user_id,
+                first_time_agent=False
+            )
+            db.session.add(agent_profile)
         
+        # Update agent profile's first_time_agent status
+        agent_profile.first_time_agent = False
+        db.session.commit()
+        
+        print(f"Successfully completed agent onboarding for user {user_id}")
         return jsonify({'message': 'Agent onboarding completed successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
+        import traceback
         print(f"Error completing agent onboarding: {e}")
-        return jsonify({'error': 'Failed to complete agent onboarding'}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to complete agent onboarding: {str(e)}'}), 500
 
 @app.route('/api/onboarding/agent-status', methods=['GET'])
 @require_auth
@@ -3428,49 +4779,45 @@ def update_agent_regions():
         # Delete existing regions for this agent
         AgentRegion.query.filter_by(agent_id=current_user['user_id']).delete()
         
-        # Add new regions
-        for region_id in selected_regions:
-            # Map region ID to region data
-            region_map = {
-                1: {'name': 'District 1', 'type': 'district', 'value': 'Raffles Place, Cecil, Marina, People\'s Park'},
-                2: {'name': 'District 2', 'type': 'district', 'value': 'Anson, Tanjong Pagar'},
-                3: {'name': 'District 3', 'type': 'district', 'value': 'Queenstown, Tiong Bahru'},
-                4: {'name': 'District 4', 'type': 'district', 'value': 'Telok Blangah, Harbourfront'},
-                5: {'name': 'District 5', 'type': 'district', 'value': 'Pasir Panjang, Hong Leong Garden, Clementi New Town'},
-                6: {'name': 'District 6', 'type': 'district', 'value': 'High Street, Beach Road (part)'},
-                7: {'name': 'District 7', 'type': 'district', 'value': 'Middle Road, Golden Mile'},
-                8: {'name': 'District 8', 'type': 'district', 'value': 'Little India'},
-                9: {'name': 'District 9', 'type': 'district', 'value': 'Orchard, Cairnhill, River Valley'},
-                10: {'name': 'District 10', 'type': 'district', 'value': 'Ardmore, Bukit Timah, Holland Road, Tanglin'},
-                11: {'name': 'District 11', 'type': 'district', 'value': 'Watten Estate, Novena, Thomson'},
-                12: {'name': 'District 12', 'type': 'district', 'value': 'Balestier, Toa Payoh, Serangoon'},
-                13: {'name': 'District 13', 'type': 'district', 'value': 'Macpherson, Braddell'},
-                14: {'name': 'District 14', 'type': 'district', 'value': 'Geylang, Eunos'},
-                15: {'name': 'District 15', 'type': 'district', 'value': 'Katong, Joo Chiat, Amber Road'},
-                16: {'name': 'District 16', 'type': 'district', 'value': 'Bedok, Upper East Coast, Eastwood, Kew Drive'},
-                17: {'name': 'District 17', 'type': 'district', 'value': 'Loyang, Changi'},
-                18: {'name': 'District 18', 'type': 'district', 'value': 'Tampines, Pasir Ris'},
-                19: {'name': 'District 19', 'type': 'district', 'value': 'Serangoon Garden, Hougang, Punggol'},
-                20: {'name': 'District 20', 'type': 'district', 'value': 'Bishan, Ang Mo Kio'},
-                21: {'name': 'District 21', 'type': 'district', 'value': 'Upper Bukit Timah, Clementi Park, Ulu Pandan'},
-                22: {'name': 'District 22', 'type': 'district', 'value': 'Jurong'},
-                23: {'name': 'District 23', 'type': 'district', 'value': 'Hillview, Dairy Farm, Bukit Panjang, Choa Chu Kang'},
-                24: {'name': 'District 24', 'type': 'district', 'value': 'Lim Chu Kang, Tengah'},
-                25: {'name': 'District 25', 'type': 'district', 'value': 'Kranji, Woodgrove'},
-                26: {'name': 'District 26', 'type': 'district', 'value': 'Upper Thomson, Springleaf'},
-                27: {'name': 'District 27', 'type': 'district', 'value': 'Yishun, Sembawang'},
-                28: {'name': 'District 28', 'type': 'district', 'value': 'Seletar'}
-            }
-            
-            if region_id in region_map:
-                region_data = region_map[region_id]
-                new_region = AgentRegion(
-                    agent_id=current_user['user_id'],
-                    region_name=region_data['name'],
-                    region_type=region_data['type'],
-                    region_value=region_data['value']
-                )
-                db.session.add(new_region)
+        # Convert to integers to ensure type consistency
+        selected_regions = [int(r) for r in selected_regions]
+        
+        # Fetch selected regions from database
+        regions = Region.query.filter(Region.id.in_(selected_regions)).all()
+        
+        # Debug logging
+        print(f"DEBUG: Selected region IDs: {selected_regions}")
+        print(f"DEBUG: Found regions: {[(r.id, r.district, r.location, r.is_active) for r in regions]}")
+        
+        # Check if all regions exist
+        if len(regions) != len(selected_regions):
+            # Get the IDs that were not found
+            found_ids = [r.id for r in regions]
+            missing_ids = [r for r in selected_regions if r not in found_ids]
+            print(f"DEBUG: Missing region IDs: {missing_ids}")
+            return jsonify({
+                'error': f'Invalid region IDs: {missing_ids}. Expected {len(selected_regions)} regions but found {len(regions)}'
+            }), 400
+        
+        if not regions:
+            return jsonify({'error': 'No valid regions found'}), 400
+        
+        # Check for inactive regions
+        inactive_regions = [r for r in regions if not r.is_active]
+        if inactive_regions:
+            return jsonify({
+                'error': f'One or more selected regions are inactive: {[r.location for r in inactive_regions]}'
+            }), 400
+        
+        # All regions are valid and active - add them
+        for region in regions:
+            new_region = AgentRegion(
+                agent_id=current_user['user_id'],
+                region_name=f'District {region.district}',
+                region_type='district',
+                region_value=region.location
+            )
+            db.session.add(new_region)
         
         db.session.commit()
         
@@ -3478,8 +4825,10 @@ def update_agent_regions():
         
     except Exception as e:
         print(f"Error updating agent regions: {e}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
-        return jsonify({'error': 'Failed to update regions'}), 500
+        return jsonify({'error': f'Failed to update regions: {str(e)}'}), 500
 
 @app.route('/api/agent/recent-activity', methods=['GET'])
 @require_auth
@@ -4311,6 +5660,110 @@ def serve_property_image(filename):
         print(f"Error serving file: {e}")
         return jsonify({'error': 'Error serving file'}), 500
 
+
+# Trial system endpoints
+@app.route('/api/trial/check', methods=['GET'])
+@require_auth
+def check_trial_status():
+    """Check if user has trial available or used"""
+    try:
+        current_user = request.user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get or create user profile
+        user_profile = UserProfile.query.filter_by(user_id=user.id).first()
+        if not user_profile:
+            user_profile = UserProfile(user_id=user.id)
+            db.session.add(user_profile)
+            db.session.commit()
+        
+        return jsonify({
+            'trial_used': user_profile.trial_used,
+            'trial_predictions_used': user_profile.trial_predictions_used,
+            'max_trial_predictions': user_profile.max_trial_predictions,
+            'trial_available': not user_profile.trial_used and user_profile.trial_predictions_used < user_profile.max_trial_predictions,
+            'trial_start_date': user_profile.trial_start_date.isoformat() if user_profile.trial_start_date else None,
+            'trial_end_date': user_profile.trial_end_date.isoformat() if user_profile.trial_end_date else None
+        }), 200
+        
+    except Exception as e:
+        print(f"Error checking trial status: {e}")
+        return jsonify({'error': 'Failed to check trial status'}), 500
+
+@app.route('/api/trial/start', methods=['POST'])
+@require_auth
+def start_trial():
+    """Start trial for user"""
+    try:
+        current_user = request.user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get or create user profile
+        user_profile = UserProfile.query.filter_by(user_id=user.id).first()
+        if not user_profile:
+            user_profile = UserProfile(user_id=user.id)
+            db.session.add(user_profile)
+        
+        # Check if trial already used
+        if user_profile.trial_used:
+            return jsonify({'error': 'Trial already used'}), 400
+        
+        # Start trial
+        user_profile.trial_start_date = datetime.utcnow()
+        user_profile.trial_end_date = datetime.utcnow() + timedelta(days=7)  # 7-day trial
+        user_profile.trial_used = True
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Trial started successfully',
+            'trial_start_date': user_profile.trial_start_date.isoformat(),
+            'trial_end_date': user_profile.trial_end_date.isoformat(),
+            'max_predictions': user_profile.max_trial_predictions
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error starting trial: {e}")
+        return jsonify({'error': 'Failed to start trial'}), 500
+
+@app.route('/api/trial/use-prediction', methods=['POST'])
+@require_auth
+def use_trial_prediction():
+    """Use a trial prediction"""
+    try:
+        current_user = request.user
+        user = User.query.get(current_user['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get user profile
+        user_profile = UserProfile.query.filter_by(user_id=user.id).first()
+        if not user_profile:
+            return jsonify({'error': 'User profile not found'}), 404
+        
+        # Check if trial is available
+        if user_profile.trial_predictions_used >= user_profile.max_trial_predictions:
+            return jsonify({'error': 'Trial predictions exhausted'}), 400
+        
+        # Increment trial predictions used
+        user_profile.trial_predictions_used += 1
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Trial prediction used successfully',
+            'predictions_remaining': user_profile.max_trial_predictions - user_profile.trial_predictions_used
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error using trial prediction: {e}")
+        return jsonify({'error': 'Failed to use trial prediction'}), 500
+
 # User preferences and recommendations endpoints
 @app.route('/api/onboarding/save-preferences', methods=['POST'])
 @require_auth
@@ -4328,7 +5781,7 @@ def save_user_preferences():
         # Update user preferences
         user.property_type_preferences = data.get('propertyTypes', [])
         user.location_preferences = data.get('locations', [])
-        user.first_time_user = False  # Mark onboarding as completed
+        # Don't reset first_time_user here - only set during initial onboarding
         
         db.session.commit()
         
@@ -4355,9 +5808,14 @@ def get_user_recommendations():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        # Get user preferences
-        property_types = user.property_type_preferences or []
-        locations = user.location_preferences or []
+        # Get user preferences - ensure they're lists even if stored as None or invalid JSON
+        property_types = user.property_type_preferences if user.property_type_preferences is not None else []
+        if not isinstance(property_types, list):
+            property_types = []
+        
+        locations = user.location_preferences if user.location_preferences is not None else []
+        if not isinstance(locations, list):
+            locations = []
         
         # Get all properties
         properties = Property.query.filter_by(status='active').all()
@@ -4373,9 +5831,12 @@ def get_user_recommendations():
             
             # Score based on property type preferences
             if property_types and property.property_type:
-                property_type_lower = property.property_type.lower()
+                # Safely handle property_type - might not be a string
+                property_type_str = str(property.property_type) if property.property_type else ''
+                property_type_lower = property_type_str.lower()
                 for pref_type in property_types:
-                    pref_type_lower = pref_type.lower()
+                    pref_type_str = str(pref_type) if pref_type else ''
+                    pref_type_lower = pref_type_str.lower()
                     
                     # Direct match
                     if property_type_lower == pref_type_lower:
@@ -4392,8 +5853,9 @@ def get_user_recommendations():
             
             # Score based on location preferences
             if locations and property.address:
-                address_lower = property.address.lower()
-                city_lower = property.city.lower() if property.city else ''
+                # Safely handle address and city - they might be None or not strings
+                address_lower = str(property.address).lower() if property.address else ''
+                city_lower = str(property.city).lower() if property.city else ''
                 
                 for location in locations:
                     if location == 'CBD' and (
@@ -4453,9 +5915,13 @@ def get_user_recommendations():
                 is_primary=True
             ).first()
             
-            # Get agent info
-            agent = User.query.get(property.agent_id)
-            agent_profile = AgentProfile.query.filter_by(user_id=property.agent_id).first()
+            # Get agent info - safely handle if agent_id is None
+            agent = None
+            agent_profile = None
+            if property.agent_id:
+                agent = User.query.get(property.agent_id)
+                if agent:
+                    agent_profile = AgentProfile.query.filter_by(user_id=property.agent_id).first()
             
             recommendations.append({
                 'id': property.id,
@@ -4464,11 +5930,11 @@ def get_user_recommendations():
                 'property_type': property.property_type,
                 'address': property.address,
                 'city': property.city,
-                'size_sqft': float(property.size_sqft) if property.size_sqft else None,
+                'size_sqft': float(property.size_sqft) if property.size_sqft is not None else None,
                 'floors': property.floors,
                 'year_built': property.year_built,
                 'parking_spaces': property.parking_spaces,
-                'price': float(property.asking_price) if property.asking_price else None,
+                'price': float(property.asking_price) if property.asking_price is not None else None,
                 'price_type': property.price_type,
                 'status': property.status,
                 'latitude': float(property.latitude) if property.latitude else None,
@@ -4494,8 +5960,11 @@ def get_user_recommendations():
         }), 200
         
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         print(f"Error getting recommendations: {e}")
-        return jsonify({'error': 'Failed to get recommendations'}), 500
+        print(f"Full traceback: {error_traceback}")
+        return jsonify({'error': f'Failed to get recommendations: {str(e)}'}), 500
 
 @app.route('/api/user/preferences', methods=['GET'])
 @require_auth
@@ -4949,8 +6418,12 @@ def upload_hero_background():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"hero_bg_{timestamp}_{file.filename}"
         
+        # Ensure directory exists
+        upload_dir = os.path.join('admin', 'hero', 'backgrounds')
+        os.makedirs(upload_dir, exist_ok=True)
+        
         # Save file
-        file_path = os.path.join('admin', 'hero', 'backgrounds', filename)
+        file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         
         # Return the URL path
@@ -4987,8 +6460,12 @@ def upload_hero_video():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"hero_video_{timestamp}_{file.filename}"
         
+        # Ensure directory exists
+        upload_dir = os.path.join('admin', 'hero', 'videos')
+        os.makedirs(upload_dir, exist_ok=True)
+        
         # Save file
-        file_path = os.path.join('admin', 'hero', 'videos', filename)
+        file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         
         # Return the URL path
@@ -5234,6 +6711,7 @@ def create_howitworks_property():
 def get_features_steps():
     """Get all features steps"""
     try:
+        # Query only columns that exist in the database to avoid schema mismatch errors
         result = db.session.execute(text("""
             SELECT id, step_number, step_title, step_description, step_image
             FROM features_steps 
@@ -5248,7 +6726,8 @@ def get_features_steps():
                 'step_number': row.step_number,
                 'step_title': row.step_title,
                 'step_description': row.step_description,
-                'step_image': row.step_image
+                'step_image': row.step_image,
+                'step_video': None  # Column doesn't exist in database
             })
         
         return jsonify({
@@ -5257,13 +6736,17 @@ def get_features_steps():
         }), 200
         
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         print(f"Error getting features steps: {e}")
-        return jsonify({'error': 'Failed to get features steps'}), 500
+        print(f"Full traceback: {error_traceback}")
+        return jsonify({'error': f'Failed to get features steps: {str(e)}'}), 500
 
 @app.route('/api/features/steps/<int:step_id>', methods=['GET'])
 def get_features_step(step_id):
     """Get specific features step by ID"""
     try:
+        # Query only columns that exist in the database to avoid schema mismatch errors
         result = db.session.execute(text("""
             SELECT id, step_number, step_title, step_description, step_image
             FROM features_steps 
@@ -5280,13 +6763,17 @@ def get_features_step(step_id):
                 'step_number': result.step_number,
                 'step_title': result.step_title,
                 'step_description': result.step_description,
-                'step_image': result.step_image
+                'step_image': result.step_image,
+                'step_video': None  # Column doesn't exist in database
             }
         }), 200
         
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         print(f"Error getting features step: {e}")
-        return jsonify({'error': 'Failed to get features step'}), 500
+        print(f"Full traceback: {error_traceback}")
+        return jsonify({'error': f'Failed to get features step: {str(e)}'}), 500
 
 @app.route('/api/features/steps/<int:step_id>', methods=['PUT'])
 @require_auth
@@ -5301,7 +6788,7 @@ def update_features_step(step_id):
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        # Update step
+        # Update step (step_video column doesn't exist in database)
         result = db.session.execute(text("""
             UPDATE features_steps 
             SET step_title = :step_title, step_description = :step_description, 
@@ -5350,7 +6837,7 @@ def create_features_step():
         
         next_step_number = result.next_step_number
         
-        # Create new step
+        # Create new step (step_video column doesn't exist in database)
         result = db.session.execute(text("""
             INSERT INTO features_steps (step_number, step_title, step_description, step_image)
             VALUES (:step_number, :step_title, :step_description, :step_image)
@@ -5413,43 +6900,59 @@ def delete_features_step(step_id):
 
 @app.route('/api/features/section-title', methods=['GET'])
 def get_features_section_title():
-    """Get features section title"""
+    """Get features section title and tutorial video"""
     try:
-        result = db.session.execute(text("""
-            SELECT section_title FROM features_section 
-            WHERE id = 1
-        """)).fetchone()
+        # Try to get the section, or create a default one if it doesn't exist
+        section = FeaturesSection.query.filter_by(id=1).first()
         
-        section_title = result.section_title if result else 'How it Works'
+        if not section:
+            # Create a default section if it doesn't exist
+            section = FeaturesSection(
+                id=1,
+                section_title='How it Works',
+                tutorial_video_url=None
+            )
+            db.session.add(section)
+            db.session.commit()
         
         return jsonify({
             'success': True,
-            'section_title': section_title
+            'section_title': section.section_title,
+            'tutorial_video_url': section.tutorial_video_url
         }), 200
         
     except Exception as e:
         print(f"Error getting features section title: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to get section title'}), 500
 
 @app.route('/api/features/section-title', methods=['PUT'])
 @require_auth
 def update_features_section_title():
-    """Update features section title"""
+    """Update features section title and tutorial video"""
     try:
         data = request.get_json()
         
         if 'section_title' not in data:
             return jsonify({'error': 'Missing section_title field'}), 400
         
-        # Update or insert section title
-        result = db.session.execute(text("""
-            INSERT INTO features_section (id, section_title, updated_at)
-            VALUES (1, :section_title, CURRENT_TIMESTAMP)
-            ON CONFLICT (id) 
-            DO UPDATE SET 
-                section_title = :section_title,
-                updated_at = CURRENT_TIMESTAMP
-        """), {'section_title': data['section_title']})
+        # Get or create the section
+        section = FeaturesSection.query.filter_by(id=1).first()
+        
+        if section:
+            # Update existing section
+            section.section_title = data['section_title']
+            if 'tutorial_video_url' in data:
+                section.tutorial_video_url = data['tutorial_video_url'] or None
+        else:
+            # Create new section
+            section = FeaturesSection(
+                id=1,
+                section_title=data['section_title'],
+                tutorial_video_url=data.get('tutorial_video_url')
+            )
+            db.session.add(section)
         
         db.session.commit()
         
@@ -5460,8 +6963,109 @@ def update_features_section_title():
         
     except Exception as e:
         print(f"Error updating features section title: {e}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
         return jsonify({'error': 'Failed to update section title'}), 500
+
+@app.route('/api/features/upload-video', methods=['POST'])
+@require_auth
+def upload_features_video():
+    """Upload features step tutorial video"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check file type
+        allowed_extensions = {'mp4', 'webm', 'ogg', 'mov'}
+        if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            return jsonify({'error': 'Invalid file type. Allowed: MP4, WEBM, OGG, MOV'}), 400
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"features_video_{timestamp}_{file.filename}"
+        
+        # Ensure directory exists
+        upload_dir = os.path.join('admin', 'features', 'videos')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Save file
+        file_path = os.path.join(upload_dir, filename)
+        file.save(file_path)
+        
+        # Return the URL path
+        file_url = f"/admin/features/videos/{filename}"
+        
+        return jsonify({
+            'success': True,
+            'file_url': file_url,
+            'filename': filename
+        }), 200
+        
+    except Exception as e:
+        print(f"Error uploading features video: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to upload video: {str(e)}'}), 500
+
+@app.route('/api/features/tutorial-video', methods=['PUT'])
+@require_auth
+def update_tutorial_video():
+    """Update tutorial video URL for the section"""
+    try:
+        data = request.get_json()
+        
+        if 'tutorial_video_url' not in data:
+            return jsonify({'error': 'Missing tutorial_video_url field'}), 400
+        
+        # Update or insert tutorial video URL
+        result = db.session.execute(text("""
+            INSERT INTO features_section (id, tutorial_video_url, updated_at)
+            VALUES (1, :tutorial_video_url, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) 
+            DO UPDATE SET 
+                tutorial_video_url = :tutorial_video_url,
+                updated_at = CURRENT_TIMESTAMP
+        """), {'tutorial_video_url': data['tutorial_video_url']})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Tutorial video URL updated successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating tutorial video: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update tutorial video URL'}), 500
+
+@app.route('/admin/features/videos/<filename>')
+def serve_features_video(filename):
+    """Serve features tutorial videos"""
+    try:
+        upload_dir = os.path.join(os.getcwd(), 'admin', 'features', 'videos')
+        file_path = os.path.join(upload_dir, filename)
+        
+        if not os.path.exists(file_path):
+            print(f"File not found: {file_path}")
+            return jsonify({'error': 'File not found'}), 404
+        
+        response = send_from_directory(upload_dir, filename)
+        # Add CORS headers
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
+    except Exception as e:
+        print(f"Error serving features video: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Error serving file'}), 500
 
 # Team API Endpoints
 
@@ -5538,7 +7142,7 @@ def get_team_members():
             # Convert relative image URL to full URL
             image_url = member.image_url
             if image_url and not image_url.startswith('http'):
-                image_url = f"http://localhost:5000{image_url}"
+                image_url = f"http://localhost:5001{image_url}"
             
             members_list.append({
                 'id': member.id,
@@ -5571,7 +7175,7 @@ def get_team_member(member_id):
         # Convert relative image URL to full URL
         image_url = member.image_url
         if image_url and not image_url.startswith('http'):
-            image_url = f"http://localhost:5000{image_url}"
+            image_url = f"http://localhost:5001{image_url}"
         
         return jsonify({
             'success': True,
@@ -6064,6 +7668,65 @@ def get_verified_reviews():
 
 # ==================== DATABASE SEEDING ====================
 
+def seed_regions():
+    """Seed the database with Singapore postal districts"""
+    
+    try:
+        # Check if regions already exist
+        if Region.query.count() > 0:
+            print("Regions already exist, skipping seeding")
+            return
+        
+        print("Seeding regions...")
+        
+        # Regions data
+        regions_data = [
+            ('01', '01, 02, 03, 04, 05, 06', 'Raffles Place, Cecil, Marina, People\'s Park'),
+            ('02', '07, 08', 'Anson, Tanjong Pagar'),
+            ('03', '14, 15, 16', 'Queenstown, Tiong Bahru'),
+            ('04', '09, 10', 'Telok Blangah, Harbourfront'),
+            ('05', '11, 12, 13', 'Pasir Panjang, Hong Leong Garden, Clementi New Town'),
+            ('06', '17', 'High Street, Beach Road (part)'),
+            ('07', '18, 19', 'Middle Road, Golden Mile'),
+            ('08', '20, 21', 'Little India'),
+            ('09', '22, 23', 'Orchard, Cairnhill, River Valley'),
+            ('10', '24, 25, 26, 27', 'Ardmore, Bukit Timah, Holland Road, Tanglin'),
+            ('11', '28, 29, 30', 'Watten Estate, Novena, Thomson'),
+            ('12', '31, 32, 33', 'Balestier, Toa Payoh, Serangoon'),
+            ('13', '34, 35, 36, 37', 'Macpherson, Braddell'),
+            ('14', '38, 39, 40, 41', 'Geylang, Eunos'),
+            ('15', '42, 43, 44, 45', 'Katong, Joo Chiat, Amber Road'),
+            ('16', '46, 47, 48', 'Bedok, Upper East Coast, Eastwood, Kew Drive'),
+            ('17', '49, 50, 81', 'Loyang, Changi'),
+            ('18', '51, 52', 'Tampines, Pasir Ris'),
+            ('19', '53, 54, 55, 82', 'Serangoon Garden, Hougang, Punggol'),
+            ('20', '56, 57', 'Bishan, Ang Mo Kio'),
+            ('21', '58, 59', 'Upper Bukit Timah, Clementi Park, Ulu Pandan'),
+            ('22', '60, 61, 62, 63, 64', 'Jurong'),
+            ('23', '65, 66, 67, 68', 'Hillview, Dairy Farm, Bukit Panjang, Choa Chu Kang'),
+            ('24', '69, 70, 71', 'Lim Chu Kang, Tengah'),
+            ('25', '72, 73', 'Kranji, Woodgrove'),
+            ('26', '77, 78', 'Upper Thomson, Springleaf'),
+            ('27', '75, 76', 'Yishun, Sembawang'),
+            ('28', '79, 80', 'Seletar'),
+        ]
+        
+        # Insert regions
+        for district, sector, location in regions_data:
+            region = Region(
+                district=district,
+                sector=sector,
+                location=location,
+                is_active=True
+            )
+            db.session.add(region)
+        
+        db.session.commit()
+        print(f"✅ Successfully seeded {Region.query.count()} regions!")
+        
+    except Exception as e:
+        print(f"❌ Error seeding regions: {e}")
+
 def seed_subscription_plans():
     """Seed the database with initial subscription plans and important features"""
     
@@ -6195,6 +7858,32 @@ def seed_subscription_plans():
         db.session.rollback()
         print(f"❌ Error seeding database: {e}")
 
+def seed_features_section():
+    """Seed the features_section table with initial data"""
+    
+    try:
+        # Check if data already exists
+        if FeaturesSection.query.count() > 0:
+            print("Features section already exists, skipping seeding")
+            return
+        
+        print("Seeding features section...")
+        
+        # Create default features section
+        features_section = FeaturesSection(
+            id=1,
+            section_title='How it Works',
+            tutorial_video_url=None
+        )
+        db.session.add(features_section)
+        db.session.commit()
+        
+        print("✅ Successfully seeded features section!")
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error seeding features section: {e}")
+
 # Admin endpoint to manually seed data
 @app.route('/api/admin/seed-subscription-plans', methods=['POST'])
 @require_auth
@@ -6233,6 +7922,8 @@ def admin_seed_subscription_plans():
 _ml_cache = {
     'df_industrial': None,
     'df_commercial_clean': None,
+    'df_office_rental': None,
+    'df_retail_rental': None,
     'all_addresses': None,
     'ml_functions': None,
     'postal_districts': None,
@@ -6249,6 +7940,8 @@ def cleanup_ml_cache():
     if _ml_cache['last_cleanup'] is None or (current_time - _ml_cache['last_cleanup']) > 1800:
         _ml_cache['df_industrial'] = None
         _ml_cache['df_commercial_clean'] = None
+        _ml_cache['df_office_rental'] = None
+        _ml_cache['df_retail_rental'] = None
         _ml_cache['all_addresses'] = None
         _ml_cache['postal_districts'] = None
         _ml_cache['last_cleanup'] = current_time
@@ -6259,6 +7952,13 @@ def run_ml_prediction(property_data):
         import time
         start_time = time.time()
         
+        # Print separator for new prediction
+        print("\n" + "="*80)
+        print("🔍 NEW PREDICTION REQUEST")
+        print("="*80)
+        print(f"📋 Property Data: {property_data}")
+        print("-"*80)
+        
         # Clean up cache if needed
         cleanup_ml_cache()
         
@@ -6267,32 +7967,36 @@ def run_ml_prediction(property_data):
         ml_dir = os.path.join(current_dir, '..', 'machinelearning')
         sys.path.insert(0, ml_dir)
         
-        # Import the enhanced ML functions directly (cache after first import)
+        # Import the multi-model ML functions directly (cache after first import)
         if _ml_cache['ml_functions'] is None:
             try:
+                from multi_model_predictor import get_multi_model_predictor
                 from ml_predictor_enhanced import predict_for_propertycard, get_unique_addresses, get_enhanced_predictor
                 
-                # Initialize the enhanced predictor and load the model
+                # Initialize the multi-model predictor and load all models
                 import time
-                start_time = time.time()
-                enhanced_predictor = get_enhanced_predictor()
-                if enhanced_predictor.load_model():
-                    load_time = time.time() - start_time
-                    print(f"✅ Enhanced ML model loaded successfully in {load_time:.2f} seconds")
+                load_start = time.time()
+                multi_predictor = get_multi_model_predictor()
+                if multi_predictor.is_loaded:
+                    load_time = time.time() - load_start
+                    print(f"✅ Multi-model ML predictor loaded successfully in {load_time:.2f} seconds")
                 else:
-                    print("⚠️ Enhanced ML model failed to load, will use fallback predictions")
+                    print("⚠️ Multi-model predictor failed to load, will use enhanced predictor as fallback")
                 
                 _ml_cache['ml_functions'] = {
+                    'multi_predictor': multi_predictor,
                     'predict_for_propertycard': predict_for_propertycard,
                     'get_unique_addresses': get_unique_addresses,
                     'get_enhanced_predictor': get_enhanced_predictor
                 }
-                print("✅ Enhanced ML functions imported successfully")
+                print("✅ Multi-model ML functions imported successfully")
             except ImportError as e:
-                print(f"❌ Failed to import enhanced ML functions: {e}")
+                print(f"❌ Failed to import multi-model ML functions: {e}")
+                import traceback
+                traceback.print_exc()
                 return {
                     'success': False,
-                    'error': f'Failed to import enhanced ML predictor module: {e}'
+                    'error': f'Failed to import multi-model ML predictor module: {e}'
                 }
         
         # Load datasets (cache after first load)
@@ -6350,6 +8054,11 @@ def run_ml_prediction(property_data):
                 if 'contract_date' in df.columns:
                     df['contract_date'] = pd.to_datetime(df['contract_date'], format='%m/%d/%Y', errors='coerce')
                 
+                # Ensure postal_district is numeric for proper filtering
+                if 'postal_district' in df.columns:
+                    df['postal_district'] = pd.to_numeric(df['postal_district'], errors='coerce')
+                    print(f"✅ Converted postal_district to numeric: {df['postal_district'].dtype}")
+                
                 _ml_cache['df_industrial'] = df
                 print(f"✅ Successfully loaded industrial data: {len(df)} rows, columns: {list(df.columns)}")
             except Exception as e:
@@ -6362,6 +8071,7 @@ def run_ml_prediction(property_data):
         # Load commercial data if not cached
         if _ml_cache['df_commercial_clean'] is None:
             try:
+                import pandas as pd  # Ensure pandas is imported
                 import time
                 start_time = time.time()
                 commercial_path = os.path.join(ml_dir, 'commercial(everything teeco)', 'CommercialTransaction20250917124317.csv')
@@ -6433,16 +8143,49 @@ def run_ml_prediction(property_data):
                 # Add planning area (set to 'Unknown' for commercial data)
                 df_commercial['planning_area'] = 'Unknown'
                 
+                # Ensure postal_district is numeric for proper filtering
+                if 'postal_district' in df_commercial.columns:
+                    df_commercial['postal_district'] = pd.to_numeric(df_commercial['postal_district'], errors='coerce')
+                    print(f"✅ Converted postal_district to numeric: {df_commercial['postal_district'].dtype}")
+                
                 _ml_cache['df_commercial_clean'] = df_commercial.dropna(subset=['price', 'area'])
                 print(f"✅ Successfully loaded commercial data: {len(df_commercial)} rows, columns: {list(df_commercial.columns)}")
             except Exception as e:
                 print(f"❌ Warning: Could not load commercial data: {e}")
                 _ml_cache['df_commercial_clean'] = None
         
+        # Load rental data if not cached
+        if _ml_cache['df_office_rental'] is None:
+            try:
+                import pandas as pd  # Ensure pandas is imported
+                office_rental_path = os.path.join(ml_dir, 'commercial(rental)', 'CommercialOfficeRental.csv')
+                df_office_rental = pd.read_csv(office_rental_path)
+                _ml_cache['df_office_rental'] = df_office_rental
+                print(f"✅ Successfully loaded office rental data: {len(df_office_rental)} rows")
+            except Exception as e:
+                print(f"❌ Warning: Could not load office rental data: {e}")
+                import traceback
+                print(f"❌ Traceback: {traceback.format_exc()}")
+                _ml_cache['df_office_rental'] = None
+        
+        if _ml_cache['df_retail_rental'] is None:
+            try:
+                import pandas as pd  # Ensure pandas is imported
+                retail_rental_path = os.path.join(ml_dir, 'commercial(rental)', 'CommercialRetailRental.csv')
+                df_retail_rental = pd.read_csv(retail_rental_path)
+                _ml_cache['df_retail_rental'] = df_retail_rental
+                print(f"✅ Successfully loaded retail rental data: {len(df_retail_rental)} rows")
+            except Exception as e:
+                print(f"❌ Warning: Could not load retail rental data: {e}")
+                import traceback
+                print(f"❌ Traceback: {traceback.format_exc()}")
+                _ml_cache['df_retail_rental'] = None
+        
         # Get all addresses (cache after first calculation) - Optimized for speed
         # Load postal districts if not cached
-        if _ml_cache['postal_districts'] is None:
+        if _ml_cache['postal_districts'] is None or (isinstance(_ml_cache['postal_districts'], dict) and len(_ml_cache['postal_districts']) == 0):
             try:
+                import pandas as pd
                 postal_districts_path = os.path.join(ml_dir, 'sg cordinates', 'sg_postal_districts.csv')
                 postal_districts_df = pd.read_csv(postal_districts_path)
                 
@@ -6450,7 +8193,7 @@ def run_ml_prediction(property_data):
                 postal_districts = {}
                 for _, row in postal_districts_df.iterrows():
                     district = row['Postal District']
-                    sectors = row['Postal Sector']
+                    sectors = str(row['Postal Sector'])  # Ensure it's a string
                     
                     # Parse sectors (e.g., "01, 02, 03" or "17")
                     if ',' in sectors:
@@ -6463,8 +8206,11 @@ def run_ml_prediction(property_data):
                 
                 _ml_cache['postal_districts'] = postal_districts
                 print(f"✅ Loaded postal districts: {len(postal_districts)} sectors mapped")
+                print(f"📋 Sample mappings: 04 -> {postal_districts.get('04')}, 27 -> {postal_districts.get('27')}")
             except Exception as e:
                 print(f"⚠️ Failed to load postal districts: {e}")
+                import traceback
+                traceback.print_exc()
                 _ml_cache['postal_districts'] = {}
 
         if _ml_cache['all_addresses'] is None:
@@ -6480,19 +8226,154 @@ def run_ml_prediction(property_data):
                     'error': f'Failed to get addresses: {e}'
                 }
         
-        # Run prediction using enhanced ML predictor
+        # Try to use multi-model predictor for direct predictions first
+        multi_predictor = _ml_cache['ml_functions'].get('multi_predictor')
+        direct_predictions = None
+        
+        if multi_predictor and multi_predictor.is_loaded:
+            try:
+                # Convert floor area from sqft to sqm
+                # Both industrial and commercial models expect "Area (SQM)" as input
+                floor_area_sqft = float(property_data.get('floorArea', 0))
+                floor_area_sqm = floor_area_sqft * 0.092903  # Convert sqft to sqm (1 sqft = 0.092903 sqm)
+                
+                # Get predictions using multi-model predictor
+                # Note: Industrial model predicts TOTAL PRICE directly
+                #       Commercial model may predict PSM/PSF (handled internally)
+                predictions = multi_predictor.predict_both(
+                    address=property_data.get('address', ''),
+                    property_type=property_data.get('propertyType', 'Office'),
+                    area_sqm=floor_area_sqm,  # Model expects area in SQM
+                    level=property_data.get('level', 'Ground Floor'),
+                    unit=property_data.get('unit', 'N/A'),
+                    tenure="Freehold"
+                )
+                
+                # Accept predictions if at least one is available AND valid (not None)
+                if predictions.get('sales_price') is not None or predictions.get('rental_price') is not None:
+                    # Check if sales_price is valid (positive)
+                    if predictions.get('sales_price') is not None and predictions['sales_price'] > 0:
+                        direct_predictions = predictions
+                        sales_str = f"${predictions['sales_price']:,.2f}" if predictions.get('sales_price') else "N/A"
+                        rental_str = f"${predictions['rental_price']:,.2f}/month" if predictions.get('rental_price') else "N/A"
+                        print(f"✅ Multi-model predictions: Sales={sales_str}, Rental={rental_str}")
+                    else:
+                        print(f"⚠️ Multi-model sales prediction was invalid (None or negative), using fallback")
+                else:
+                    print(f"⚠️ Multi-model predictions returned None for both sales and rental, using fallback")
+            except Exception as e:
+                print(f"⚠️ Multi-model prediction failed: {e}, falling back to enhanced predictor")
+                import traceback
+                traceback.print_exc()
+        
+        # Run prediction using enhanced ML predictor for full analysis
         try:
+            # Ensure postal_districts is loaded
+            postal_districts_for_prediction = _ml_cache.get('postal_districts') or {}
+            if len(postal_districts_for_prediction) == 0:
+                print(f"⚠️ WARNING: postal_districts is empty, district filtering will not work!")
+            else:
+                print(f"📋 Passing postal_districts with {len(postal_districts_for_prediction)} sectors to predictor")
+            
             property_data_result, comparison_data_result, matched_address = _ml_cache['ml_functions']['predict_for_propertycard'](
                 frontend_property_data=property_data,
                 all_addresses=_ml_cache['all_addresses'],
                 df_industrial=_ml_cache['df_industrial'],
                 df_commercial=_ml_cache['df_commercial_clean'],
-                postal_districts=_ml_cache['postal_districts']
+                postal_districts=postal_districts_for_prediction,
+                df_retail_rental=_ml_cache['df_retail_rental'],
+                df_office_rental=_ml_cache['df_office_rental']
             )
+            
+            # Only override with multi-model predictions if comparison_data doesn't already have adjusted values
+            # (The analyze_commercial_market/analyze_industrial_market functions may have already adjusted
+            # the prediction based on market data, so we should respect that adjustment)
+            if direct_predictions:
+                # Check if comparison_data already has a validated/adjusted price
+                # If it was adjusted, it means market data validation found the ML prediction was off
+                current_sales_str = comparison_data_result.get('estimatedSalesPrice', '')
+                
+                # Only override if comparison_data is using fallback (contains "N/A" or seems unadjusted)
+                # OR if the current value seems to be from simple estimation (very round numbers)
+                should_override = False
+                if not current_sales_str or current_sales_str == 'N/A' or 'Loading' in current_sales_str:
+                    should_override = True
+                else:
+                    # If comparison_data already has a properly formatted price, keep it
+                    # (it may have been adjusted based on market data)
+                    should_override = False
+                    print(f"ℹ️ Keeping adjusted prediction from market data validation: {current_sales_str}")
+                
+                # Format sales price if we should override
+                if should_override and direct_predictions.get('sales_price') is not None:
+                    sales_price = direct_predictions['sales_price']
+                    
+                    # Ensure sales price is positive and reasonable
+                    if sales_price < 0:
+                        print(f"⚠️ Warning: Negative sales price detected: ${sales_price:,.2f}, using absolute value")
+                        sales_price = abs(sales_price)
+                    
+                    # Minimum reasonable price check
+                    floor_area_sqft = float(property_data.get('floorArea', 0))
+                    if floor_area_sqft > 0:
+                        min_price = floor_area_sqft * 100  # Minimum $100 PSF
+                        if sales_price < min_price:
+                            print(f"⚠️ Warning: Sales price ${sales_price:,.2f} below minimum ${min_price:,.2f}, using minimum")
+                            sales_price = min_price
+                    
+                    if sales_price >= 1000000:
+                        formatted_sales = f"${sales_price/1000000:.2f}M"
+                    elif sales_price >= 1000:
+                        formatted_sales = f"${sales_price/1000:.0f}k"
+                    else:
+                        formatted_sales = f"${sales_price:,.0f}"
+                    comparison_data_result['estimatedSalesPrice'] = formatted_sales
+                    print(f"✅ Updated sales price with multi-model prediction: {formatted_sales}")
+                
+                # Format rental price if available - only override if not already adjusted
+                current_rental_str = comparison_data_result.get('estimatedRentalPrice', '')
+                
+                # Only override if comparison_data is using fallback (contains "N/A" or seems unadjusted)
+                should_override_rental = False
+                if not current_rental_str or current_rental_str == 'N/A' or 'Loading' in current_rental_str:
+                    should_override_rental = True
+                else:
+                    # If comparison_data already has a properly formatted price, keep it
+                    # (ML rental prediction is used directly without adjustment)
+                    should_override_rental = False
+                    print(f"ℹ️ Keeping ML rental prediction from enhanced predictor: {current_rental_str}")
+                
+                if should_override_rental and direct_predictions.get('rental_price') is not None:
+                    rental_price = direct_predictions['rental_price']
+                    
+                    # Ensure rental price is positive
+                    if rental_price < 0:
+                        print(f"⚠️ Warning: Negative rental price detected: ${rental_price:,.2f}, using absolute value")
+                        rental_price = abs(rental_price)
+                    
+                    # Minimum reasonable rental check
+                    floor_area_sqft = float(property_data.get('floorArea', 0))
+                    if floor_area_sqft > 0:
+                        min_rental = floor_area_sqft * 1  # Minimum $1 PSF/month
+                        if rental_price < min_rental:
+                            print(f"⚠️ Warning: Rental price ${rental_price:,.2f} below minimum ${min_rental:,.2f}, using minimum")
+                            rental_price = min_rental
+                    
+                    if rental_price >= 1000:
+                        formatted_rental = f"${rental_price/1000:.1f}k/month"
+                    else:
+                        formatted_rental = f"${rental_price:,.0f}/month"
+                    comparison_data_result['estimatedRentalPrice'] = formatted_rental
+                    print(f"✅ Updated rental price with multi-model prediction: {formatted_rental}")
             
             # Return results
             total_time = time.time() - start_time
             print(f"⏱️ Total prediction time: {total_time:.2f} seconds")
+            
+            # Print separator at end of successful prediction
+            print("-"*80)
+            print(f"✅ PREDICTION COMPLETE (Time: {total_time:.2f}s)")
+            print("="*80 + "\n")
             
             return {
                 'success': True,
@@ -6505,6 +8386,9 @@ def run_ml_prediction(property_data):
             print(f"❌ Prediction failed: {e}")
             import traceback
             print(f"❌ Traceback: {traceback.format_exc()}")
+            print("-"*80)
+            print("❌ PREDICTION FAILED")
+            print("="*80 + "\n")
             return {
                 'success': False,
                 'error': f'Prediction failed: {e}'
@@ -6514,6 +8398,9 @@ def run_ml_prediction(property_data):
         print(f"❌ ML prediction error: {e}")
         import traceback
         print(f"❌ Traceback: {traceback.format_exc()}")
+        print("-"*80)
+        print("❌ PREDICTION ERROR")
+        print("="*80 + "\n")
         return {
             'success': False,
             'error': f'ML prediction error: {str(e)}'
@@ -6545,6 +8432,31 @@ def predict_price():
         except jwt.InvalidTokenError as e:
             print(f"❌ Invalid token: {e}")
             return jsonify({'error': 'Invalid token'}), 401
+        
+        # Get user and check if they're a free user with limit reached
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Debug: Print user info
+        print(f"🔍 User check - user_id: {user_id}, user_type: {user.user_type}")
+        
+        # Check if free user has exceeded prediction limit
+        if user.user_type and user.user_type.lower() == 'free':
+            prediction_count = PricePrediction.query.filter_by(user_id=user_id).count()
+            print(f"🔍 Free user prediction count: {prediction_count}/3")
+            
+            if prediction_count >= 3:
+                print(f"❌ Blocking prediction - limit reached: {prediction_count} >= 3")
+                return jsonify({
+                    'error': 'prediction_limit_reached',
+                    'message': 'You have reached your free prediction limit (3 searches). Please upgrade to Premium to continue using price predictions.',
+                    'current_count': prediction_count,
+                    'limit': 3,
+                    'upgrade_required': True
+                }), 403
+            else:
+                print(f"✅ Allowing prediction - count: {prediction_count} < 3")
         
         # Get property data from request
         data = request.get_json()
@@ -6605,11 +8517,20 @@ def predict_price():
             db.session.add(prediction)
             db.session.commit()
             
+            print(f"✅ Prediction saved to database - ID: {prediction.id}, user_id: {user_id}")
+            
+            # Verify the count after saving
+            if user.user_type and user.user_type.lower() == 'free':
+                new_count = PricePrediction.query.filter_by(user_id=user_id).count()
+                print(f"🔍 Updated prediction count for user {user_id}: {new_count}")
+            
             # Add prediction ID to response
             property_data_result['prediction_id'] = prediction.id
             
         except Exception as e:
-            print(f"Error saving prediction to database: {e}")
+            print(f"❌ Error saving prediction to database: {e}")
+            import traceback
+            traceback.print_exc()
             # Continue without saving to database
         
         # Return the prediction results
@@ -6670,6 +8591,43 @@ def predict_price_test():
         print(f"Error in predict_price_test endpoint: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/api/predictions/check-limit', methods=['GET'])
+@require_auth
+def check_prediction_limit():
+    """Check if free user has reached prediction limit"""
+    try:
+        current_user = request.user
+        user_id = current_user['user_id']
+        
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Only check limit for free users
+        if user.user_type and user.user_type.lower() == 'free':
+            prediction_count = PricePrediction.query.filter_by(user_id=user_id).count()
+            return jsonify({
+                'is_free_user': True,
+                'prediction_count': prediction_count,
+                'limit': 3,
+                'limit_reached': prediction_count >= 3,
+                'remaining': max(0, 3 - prediction_count)
+            }), 200
+        else:
+            return jsonify({
+                'is_free_user': False,
+                'prediction_count': 0,
+                'limit': 0,
+                'limit_reached': False,
+                'remaining': -1  # Unlimited for premium/agent/admin
+            }), 200
+            
+    except Exception as e:
+        print(f"Error checking prediction limit: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to check prediction limit'}), 500
+
 @app.route('/api/predictions/user/<int:user_id>', methods=['GET'])
 def get_user_predictions(user_id):
     """Get all predictions for a specific user"""
@@ -6715,8 +8673,739 @@ def get_user_predictions(user_id):
         print(f"Error in get_user_predictions endpoint: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+# ===================== Admin Regions Management Endpoints =====================
+
+@app.route('/api/admin/regions', methods=['GET'])
+@require_auth
+def get_all_regions():
+    """Get all regions - accessible to both admin and agents"""
+    try:
+        current_user = request.user
+        
+        # Get all regions
+        regions = Region.query.order_by(Region.district).all()
+        
+        regions_data = []
+        for region in regions:
+            regions_data.append({
+                'id': region.id,
+                'district': region.district,
+                'sector': region.sector,
+                'location': region.location,
+                'is_active': region.is_active,
+                'created_at': region.created_at.isoformat() if region.created_at else None,
+                'updated_at': region.updated_at.isoformat() if region.updated_at else None
+            })
+        
+        return jsonify({'regions': regions_data}), 200
+        
+    except Exception as e:
+        print(f"Error getting regions: {e}")
+        return jsonify({'error': 'Failed to get regions'}), 500
+
+@app.route('/api/admin/regions/<int:region_id>', methods=['GET'])
+@require_auth
+def get_region(region_id):
+    """Get a specific region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        region = Region.query.get(region_id)
+        if not region:
+            return jsonify({'error': 'Region not found'}), 404
+        
+        return jsonify({
+            'id': region.id,
+            'district': region.district,
+            'sector': region.sector,
+            'location': region.location,
+            'is_active': region.is_active
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting region: {e}")
+        return jsonify({'error': 'Failed to get region'}), 500
+
+@app.route('/api/admin/regions', methods=['POST'])
+@require_auth
+def create_region():
+    """Create a new region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        data = request.get_json()
+        district = data.get('district')
+        sector = data.get('sector')
+        location = data.get('location')
+        
+        if not district or not sector or not location:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Create new region
+        new_region = Region(
+            district=district,
+            sector=sector,
+            location=location,
+            is_active=True
+        )
+        db.session.add(new_region)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Region created successfully',
+            'region': {
+                'id': new_region.id,
+                'district': new_region.district,
+                'sector': new_region.sector,
+                'location': new_region.location,
+                'is_active': new_region.is_active
+            }
+        }), 201
+        
+    except Exception as e:
+        print(f"Error creating region: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create region'}), 500
+
+@app.route('/api/admin/regions/<int:region_id>', methods=['PUT'])
+@require_auth
+def update_region(region_id):
+    """Update a region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        region = Region.query.get(region_id)
+        if not region:
+            return jsonify({'error': 'Region not found'}), 404
+        
+        data = request.get_json()
+        
+        if 'district' in data:
+            region.district = data['district']
+        if 'sector' in data:
+            region.sector = data['sector']
+        if 'location' in data:
+            region.location = data['location']
+        if 'is_active' in data:
+            region.is_active = data['is_active']
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Region updated successfully',
+            'region': {
+                'id': region.id,
+                'district': region.district,
+                'sector': region.sector,
+                'location': region.location,
+                'is_active': region.is_active
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating region: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update region'}), 500
+
+@app.route('/api/admin/regions/<int:region_id>', methods=['DELETE'])
+@require_auth
+def delete_region(region_id):
+    """Delete a region"""
+    try:
+        current_user = request.user
+        
+        # Verify user is an admin
+        user = User.query.get(current_user['user_id'])
+        if not user or user.user_type != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        region = Region.query.get(region_id)
+        if not region:
+            return jsonify({'error': 'Region not found'}), 404
+        
+        # Check if any agents are assigned to this region
+        region_value = f"District {region.district}"
+        agent_regions_count = AgentRegion.query.filter_by(region_value=region.location).count()
+        
+        if agent_regions_count > 0:
+            return jsonify({'error': f'Cannot delete region. {agent_regions_count} agent(s) assigned to this region.'}), 400
+        
+        db.session.delete(region)
+        db.session.commit()
+        
+        return jsonify({'message': 'Region deleted successfully'}), 200
+        
+    except Exception as e:
+        print(f"Error deleting region: {e}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete region'}), 500
+
+@app.route('/api/property-card/export-excel', methods=['POST'])
+@require_auth
+def export_property_card_excel():
+    """Export property card data to Excel format"""
+    try:
+        # Check if user is a free user - restrict download for free users
+        current_user = request.user
+        user_id = current_user['user_id']
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Block free users from downloading reports
+        if user.user_type and user.user_type.lower() == 'free':
+            return jsonify({
+                'error': 'Report download is not available for free users. Please upgrade to Premium to download reports.',
+                'upgrade_required': True
+            }), 403
+        
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        from io import BytesIO
+        from flask import send_file
+        
+        data = request.json
+        
+        # Check if this is a comparison (multiple properties)
+        is_comparison = data.get('isComparison', False)
+        property1_data = data.get('property1', {})
+        property2_data = data.get('property2', {})
+        
+        # Single property mode (backward compatible)
+        if not is_comparison:
+            property_data = data.get('property', {})
+            comparison_data = data.get('comparisonData', {})
+            ml_prediction_data = data.get('mlPredictionData', {})
+            nearby_properties = data.get('nearbyProperties', [])
+            region_agents = data.get('regionAgents', [])
+            
+            # Use ML prediction data if available, otherwise fallback to comparison data
+            effective_comparison = ml_prediction_data.get('comparison_data', {}) if ml_prediction_data else comparison_data
+        else:
+            # Comparison mode
+            property1_comparison_data = property1_data.get('comparisonData', {})
+            property1_ml_data = property1_data.get('mlPredictionData', {})
+            property1_effective_comparison = property1_ml_data.get('comparison_data', {}) if property1_ml_data else property1_comparison_data
+            
+            property2_comparison_data = property2_data.get('comparisonData', {})
+            property2_ml_data = property2_data.get('mlPredictionData', {})
+            property2_effective_comparison = property2_ml_data.get('comparison_data', {}) if property2_ml_data else property2_comparison_data
+        
+        # Create workbook and worksheet
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Property Report" if not is_comparison else "Property Comparison Report"
+        
+        # Define styles
+        header_font = Font(bold=True, size=12, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        title_font = Font(bold=True, size=14, color="000000")
+        title_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        center_alignment = Alignment(horizontal='center', vertical='center')
+        
+        row = 1
+        
+        # Title
+        if is_comparison:
+            ws.merge_cells(f'A{row}:G{row}')
+            ws[f'A{row}'] = "Property Comparison Report"
+        else:
+            ws.merge_cells(f'A{row}:E{row}')
+            ws[f'A{row}'] = "Property Analysis Report"
+        ws[f'A{row}'].font = Font(bold=True, size=16)
+        ws[f'A{row}'].alignment = center_alignment
+        row += 2
+        
+        # Handle comparison mode vs single property mode
+        if is_comparison:
+            # COMPARISON MODE: Side-by-side layout
+            prop1 = property1_data.get('property', {})
+            prop2 = property2_data.get('property', {})
+            prop1_nearby = property1_data.get('nearbyProperties', [])
+            prop2_nearby = property2_data.get('nearbyProperties', [])
+            prop1_agents = property1_data.get('regionAgents', [])
+            prop2_agents = property2_data.get('regionAgents', [])
+            
+            # Property Details Comparison Section
+            ws[f'A{row}'] = "Property Details Comparison"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:G{row}')
+            row += 1
+            
+            # Comparison headers
+            ws[f'A{row}'] = "Attribute"
+            ws[f'B{row}'] = "Property 1"
+            ws[f'C{row}'] = "Property 2"
+            for col in [1, 2, 3]:
+                cell = ws.cell(row=row, column=col)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = border
+                cell.alignment = center_alignment
+            row += 1
+            
+            # Property details comparison
+            comparison_details = [
+                ['Address', prop1.get('address', 'N/A'), prop2.get('address', 'N/A')],
+                ['Property Type', prop1.get('propertyType', 'N/A'), prop2.get('propertyType', 'N/A')],
+                ['Floor Area', f"{prop1.get('floorArea', 'N/A')} sq ft", f"{prop2.get('floorArea', 'N/A')} sq ft"],
+                ['Level', prop1.get('level', 'N/A'), prop2.get('level', 'N/A')],
+                ['Unit', prop1.get('unit', 'N/A'), prop2.get('unit', 'N/A')]
+            ]
+            
+            for detail in comparison_details:
+                ws.cell(row=row, column=1, value=detail[0]).font = Font(bold=True)
+                ws.cell(row=row, column=1).border = border
+                ws.cell(row=row, column=2, value=detail[1]).border = border
+                ws.cell(row=row, column=3, value=detail[2]).border = border
+                row += 1
+            
+            row += 1
+            
+            # Price Estimates Comparison
+            ws[f'A{row}'] = "Price Estimates Comparison"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:G{row}')
+            row += 1
+            
+            ws[f'A{row}'] = "Attribute"
+            ws[f'B{row}'] = "Property 1"
+            ws[f'C{row}'] = "Property 2"
+            for col in [1, 2, 3]:
+                cell = ws.cell(row=row, column=col)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = border
+                cell.alignment = center_alignment
+            row += 1
+            
+            price_comparison = [
+                ['Estimated Sales Price', 
+                 property1_effective_comparison.get('estimatedSalesPrice', 'N/A'),
+                 property2_effective_comparison.get('estimatedSalesPrice', 'N/A')],
+                ['Estimated Rental Price',
+                 property1_effective_comparison.get('estimatedRentalPrice', 'N/A'),
+                 property2_effective_comparison.get('estimatedRentalPrice', 'N/A')]
+            ]
+            
+            for price_detail in price_comparison:
+                ws.cell(row=row, column=1, value=price_detail[0]).font = Font(bold=True)
+                ws.cell(row=row, column=1).border = border
+                ws.cell(row=row, column=2, value=price_detail[1]).border = border
+                ws.cell(row=row, column=3, value=price_detail[2]).border = border
+                row += 1
+            
+            row += 1
+            
+            # Market Trends Comparison
+            ws[f'A{row}'] = "Market Trends Comparison"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:G{row}')
+            row += 1
+            
+            ws[f'A{row}'] = "Attribute"
+            ws[f'B{row}'] = "Property 1"
+            ws[f'C{row}'] = "Property 2"
+            for col in [1, 2, 3]:
+                cell = ws.cell(row=row, column=col)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = border
+                cell.alignment = center_alignment
+            row += 1
+            
+            trend_comparison = [
+                ['Market Trend',
+                 property1_effective_comparison.get('marketTrend', 'N/A'),
+                 property2_effective_comparison.get('marketTrend', 'N/A')],
+                ['Period',
+                 property1_effective_comparison.get('marketTrendPeriod', 'N/A'),
+                 property2_effective_comparison.get('marketTrendPeriod', 'N/A')]
+            ]
+            
+            for trend_detail in trend_comparison:
+                ws.cell(row=row, column=1, value=trend_detail[0]).font = Font(bold=True)
+                ws.cell(row=row, column=1).border = border
+                ws.cell(row=row, column=2, value=trend_detail[1]).border = border
+                ws.cell(row=row, column=3, value=trend_detail[2]).border = border
+                row += 1
+            
+            row += 1
+            
+            # Price Statistics Comparison
+            ws[f'A{row}'] = "Price Statistics Comparison"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:G{row}')
+            row += 1
+            
+            ws[f'A{row}'] = "Attribute"
+            ws[f'B{row}'] = "Property 1"
+            ws[f'C{row}'] = "Property 2"
+            for col in [1, 2, 3]:
+                cell = ws.cell(row=row, column=col)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = border
+                cell.alignment = center_alignment
+            row += 1
+            
+            stats_comparison = [
+                ['Median Sale Price',
+                 property1_effective_comparison.get('medianSalePrice', 'N/A'),
+                 property2_effective_comparison.get('medianSalePrice', 'N/A')],
+                ['Highest Sold Price',
+                 property1_effective_comparison.get('highestSoldPriceDescription', 'N/A')[:50] + '...' if len(property1_effective_comparison.get('highestSoldPriceDescription', 'N/A')) > 50 else property1_effective_comparison.get('highestSoldPriceDescription', 'N/A'),
+                 property2_effective_comparison.get('highestSoldPriceDescription', 'N/A')[:50] + '...' if len(property2_effective_comparison.get('highestSoldPriceDescription', 'N/A')) > 50 else property2_effective_comparison.get('highestSoldPriceDescription', 'N/A')]
+            ]
+            
+            for stats_detail in stats_comparison:
+                ws.cell(row=row, column=1, value=stats_detail[0]).font = Font(bold=True)
+                ws.cell(row=row, column=1).border = border
+                ws.cell(row=row, column=2, value=stats_detail[1]).border = border
+                ws.cell(row=row, column=3, value=stats_detail[2]).border = border
+                row += 1
+            
+            row += 1
+            
+            # Property 1 Transactions Section
+            prop1_transactions = property1_effective_comparison.get('historicalTransactions', [])
+            if prop1_transactions:
+                ws[f'A{row}'] = "Property 1 - Similar Properties Transactions"
+                ws[f'A{row}'].font = title_font
+                ws[f'A{row}'].fill = title_fill
+                ws.merge_cells(f'A{row}:G{row}')
+                row += 1
+                
+                headers = ['Address', 'Property Type', 'Floor Area', 'Date', 'Sales Price', 'Unit Price ($ psf)', 'Postal District']
+                for col, header in enumerate(headers, 1):
+                    cell = ws.cell(row=row, column=col)
+                    cell.value = header
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.border = border
+                    cell.alignment = center_alignment
+                row += 1
+                
+                for transaction in prop1_transactions[:5]:  # Limit to 5 for comparison
+                    ws.cell(row=row, column=1, value=transaction.get('address', 'N/A')).border = border
+                    ws.cell(row=row, column=2, value=transaction.get('propertyType', 'N/A')).border = border
+                    ws.cell(row=row, column=3, value=transaction.get('floorArea', 'N/A')).border = border
+                    ws.cell(row=row, column=4, value=transaction.get('date', 'N/A')).border = border
+                    ws.cell(row=row, column=5, value=transaction.get('price', 'N/A')).border = border
+                    ws.cell(row=row, column=6, value=transaction.get('unitPricePsf', transaction.get('unit_price_psf', 'N/A'))).border = border
+                    ws.cell(row=row, column=7, value=transaction.get('postalDistrict', 'N/A')).border = border
+                    row += 1
+                
+                row += 1
+            
+            # Property 2 Transactions Section
+            prop2_transactions = property2_effective_comparison.get('historicalTransactions', [])
+            if prop2_transactions:
+                ws[f'A{row}'] = "Property 2 - Similar Properties Transactions"
+                ws[f'A{row}'].font = title_font
+                ws[f'A{row}'].fill = title_fill
+                ws.merge_cells(f'A{row}:G{row}')
+                row += 1
+                
+                headers = ['Address', 'Property Type', 'Floor Area', 'Date', 'Sales Price', 'Unit Price ($ psf)', 'Postal District']
+                for col, header in enumerate(headers, 1):
+                    cell = ws.cell(row=row, column=col)
+                    cell.value = header
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.border = border
+                    cell.alignment = center_alignment
+                row += 1
+                
+                for transaction in prop2_transactions[:5]:  # Limit to 5 for comparison
+                    ws.cell(row=row, column=1, value=transaction.get('address', 'N/A')).border = border
+                    ws.cell(row=row, column=2, value=transaction.get('propertyType', 'N/A')).border = border
+                    ws.cell(row=row, column=3, value=transaction.get('floorArea', 'N/A')).border = border
+                    ws.cell(row=row, column=4, value=transaction.get('date', 'N/A')).border = border
+                    ws.cell(row=row, column=5, value=transaction.get('price', 'N/A')).border = border
+                    ws.cell(row=row, column=6, value=transaction.get('unitPricePsf', transaction.get('unit_price_psf', 'N/A'))).border = border
+                    ws.cell(row=row, column=7, value=transaction.get('postalDistrict', 'N/A')).border = border
+                    row += 1
+                
+                row += 1
+            
+            # Update filename for comparison
+            prop1_address = prop1.get('address', 'property1').replace('/', '-').replace('\\', '-').replace(':', '-')
+            prop2_address = prop2.get('address', 'property2').replace('/', '-').replace('\\', '-').replace(':', '-')
+            address_safe = f"{prop1_address}-vs-{prop2_address}"
+            
+        else:
+            # SINGLE PROPERTY MODE (existing code)
+            # Property Details Section
+            ws[f'A{row}'] = "Property Details"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:E{row}')
+            row += 1
+            
+            property_details = [
+                ['Address', property_data.get('address', 'N/A')],
+                ['Property Type', property_data.get('propertyType', 'N/A')],
+                ['Floor Area', f"{property_data.get('floorArea', 'N/A')} sq ft"],
+                ['Level', property_data.get('level', 'N/A')],
+                ['Unit', property_data.get('unit', 'N/A')]
+            ]
+            
+            for detail in property_details:
+                ws[f'A{row}'] = detail[0]
+                ws[f'B{row}'] = detail[1]
+                ws[f'A{row}'].font = Font(bold=True)
+                ws[f'A{row}'].border = border
+                ws[f'B{row}'].border = border
+                row += 1
+            
+            row += 1
+        
+            # Estimated Prices Section
+            ws[f'A{row}'] = "Price Estimates"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:E{row}')
+            row += 1
+            
+            ws[f'A{row}'] = "Estimated Sales Price"
+            ws[f'B{row}'] = effective_comparison.get('estimatedSalesPrice', 'N/A')
+            ws[f'A{row}'].font = Font(bold=True)
+            ws[f'A{row}'].border = border
+            ws[f'B{row}'].border = border
+            row += 1
+            
+            ws[f'A{row}'] = "Estimated Rental Price"
+            ws[f'B{row}'] = effective_comparison.get('estimatedRentalPrice', 'N/A')
+            ws[f'A{row}'].font = Font(bold=True)
+            ws[f'A{row}'].border = border
+            ws[f'B{row}'].border = border
+            row += 1
+            
+            row += 1
+            
+            # Market Trends Section
+            ws[f'A{row}'] = "Market Trends"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:E{row}')
+            row += 1
+            
+            ws[f'A{row}'] = "Market Trend"
+            ws[f'B{row}'] = effective_comparison.get('marketTrend', 'N/A')
+            ws[f'A{row}'].font = Font(bold=True)
+            ws[f'A{row}'].border = border
+            ws[f'B{row}'].border = border
+            row += 1
+            
+            ws[f'A{row}'] = "Period"
+            ws[f'B{row}'] = effective_comparison.get('marketTrendPeriod', 'N/A')
+            ws[f'A{row}'].font = Font(bold=True)
+            ws[f'A{row}'].border = border
+            ws[f'B{row}'].border = border
+            row += 1
+            
+            row += 1
+            
+            # Price Statistics Section
+            ws[f'A{row}'] = "Price Statistics"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:E{row}')
+            row += 1
+            
+            ws[f'A{row}'] = "Median Sale Price"
+            ws[f'B{row}'] = effective_comparison.get('medianSalePrice', 'N/A')
+            ws[f'A{row}'].font = Font(bold=True)
+            ws[f'A{row}'].border = border
+            ws[f'B{row}'].border = border
+            row += 1
+            
+            ws[f'A{row}'] = "Highest Sold Price"
+            ws[f'B{row}'] = effective_comparison.get('highestSoldPriceDescription', 'N/A')
+            ws[f'A{row}'].font = Font(bold=True)
+            ws[f'A{row}'].border = border
+            ws[f'B{row}'].border = border
+            ws[f'B{row}'].alignment = Alignment(wrap_text=True)
+            row += 1
+            
+            row += 1
+            
+            # Set address_safe for single property mode
+            address_safe = property_data.get('address', 'property').replace('/', '-').replace('\\', '-').replace(':', '-')
+        
+        # Similar Properties Transactions Section (only for single property mode)
+        if not is_comparison:
+            historical_transactions = effective_comparison.get('historicalTransactions', [])
+            if historical_transactions:
+                ws[f'A{row}'] = "Similar Properties Transactions"
+                ws[f'A{row}'].font = title_font
+                ws[f'A{row}'].fill = title_fill
+                ws.merge_cells(f'A{row}:G{row}')
+                row += 1
+                
+                # Headers
+                headers = ['Address', 'Property Type', 'Floor Area', 'Date', 'Sales Price', 'Unit Price ($ psf)', 'Postal District']
+                for col, header in enumerate(headers, 1):
+                    cell = ws.cell(row=row, column=col)
+                    cell.value = header
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.border = border
+                    cell.alignment = center_alignment
+                row += 1
+                
+                # Transaction rows
+                for transaction in historical_transactions:
+                    ws.cell(row=row, column=1, value=transaction.get('address', 'N/A')).border = border
+                    ws.cell(row=row, column=2, value=transaction.get('propertyType', 'N/A')).border = border
+                    ws.cell(row=row, column=3, value=transaction.get('floorArea', 'N/A')).border = border
+                    ws.cell(row=row, column=4, value=transaction.get('date', 'N/A')).border = border
+                    ws.cell(row=row, column=5, value=transaction.get('price', 'N/A')).border = border
+                    ws.cell(row=row, column=6, value=transaction.get('unitPricePsf', transaction.get('unit_price_psf', 'N/A'))).border = border
+                    ws.cell(row=row, column=7, value=transaction.get('postalDistrict', 'N/A')).border = border
+                    row += 1
+                
+                row += 1
+        
+        # Nearby Properties Section (only for single property mode)
+        if not is_comparison and nearby_properties:
+            ws[f'A{row}'] = "Nearby Properties"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:E{row}')
+            row += 1
+            
+            # Headers
+            headers = ['Address', 'Property Type', 'Size', 'Price', 'Action']
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=row, column=col)
+                cell.value = header
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = border
+                cell.alignment = center_alignment
+            row += 1
+            
+            # Property rows
+            for prop in nearby_properties:
+                size_str = f"{prop.get('size_sqft', prop.get('size', 'N/A'))} sq ft" if prop.get('size_sqft') else prop.get('size', 'N/A')
+                price_str = 'N/A'
+                if prop.get('asking_price'):
+                    price = prop['asking_price']
+                    if prop.get('price_type') == 'rental':
+                        price_str = f"${(price / 1000):.0f}k/month"
+                    elif price >= 1000000:
+                        price_str = f"${(price / 1000000):.1f}M"
+                    else:
+                        price_str = f"${(price / 1000):.0f}k"
+                
+                ws.cell(row=row, column=1, value=prop.get('address', 'N/A')).border = border
+                ws.cell(row=row, column=2, value=prop.get('property_type', 'N/A')).border = border
+                ws.cell(row=row, column=3, value=size_str).border = border
+                ws.cell(row=row, column=4, value=price_str).border = border
+                ws.cell(row=row, column=5, value='View Details').border = border
+                row += 1
+            
+            row += 1
+        
+        # Contact Agents Section (only for single property mode)
+        if not is_comparison and region_agents:
+            ws[f'A{row}'] = "Contact Agents"
+            ws[f'A{row}'].font = title_font
+            ws[f'A{row}'].fill = title_fill
+            ws.merge_cells(f'A{row}:E{row}')
+            row += 1
+            
+            # Headers
+            headers = ['Name', 'Company', 'License', 'Phone', 'Email']
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=row, column=col)
+                cell.value = header
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = border
+                cell.alignment = center_alignment
+            row += 1
+            
+            # Agent rows
+            for agent in region_agents:
+                ws.cell(row=row, column=1, value=agent.get('name', 'N/A')).border = border
+                ws.cell(row=row, column=2, value=agent.get('company', 'N/A')).border = border
+                ws.cell(row=row, column=3, value=agent.get('license', 'N/A')).border = border
+                ws.cell(row=row, column=4, value=agent.get('phone', 'N/A')).border = border
+                ws.cell(row=row, column=5, value=agent.get('email', 'N/A')).border = border
+                row += 1
+        
+        # Auto-adjust column widths
+        for col in range(1, 8):
+            max_length = 0
+            column_letter = get_column_letter(col)
+            for cell in ws[column_letter]:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Save to BytesIO
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        # Generate filename (address_safe is already set above based on mode)
+        filename = f"property-report-{address_safe}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx"
+        # Clean filename for safe download
+        filename_safe = "".join(c for c in filename if c.isalnum() or c in ('-', '_', '.'))[:200]  # Limit length
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename_safe
+        )
+        
+    except ImportError:
+        return jsonify({'error': 'openpyxl library not installed. Please install it using: pip install openpyxl'}), 500
+    except Exception as e:
+        print(f"Error generating Excel report: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to generate Excel report: {str(e)}'}), 500
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Create tables if they don't exist
+        seed_regions()  # Seed regions data
         seed_subscription_plans()  # Seed initial data
-    app.run(debug=True, host='0.0.0.0', port=5000)
+        seed_features_section()  # Seed features section
+    app.run(debug=True, host='0.0.0.0', port=5001)
