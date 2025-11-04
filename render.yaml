@@ -2,9 +2,9 @@ services:
   - type: web
     name: fyp-app-backend
     env: python
-    rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 4 --timeout 120
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn backend.app:app --bind 0.0.0.0:$PORT --workers 4 --timeout 120
     envVars:
       - key: DATABASE_URL
         sync: false
