@@ -222,7 +222,8 @@ const SubscriptionPlans = () => {
                 key={plan.id}
                 className={`plan-card ${plan.isPopular ? 'popular' : ''}`}
               >
-                {plan.badge && (
+                {/* Only show badge if plan is not marked as popular (popular plans use CSS ::before for "Most Popular") */}
+                {plan.badge && !plan.isPopular && (
                   <div className="plan-badge">{plan.badge}</div>
                 )}
                 

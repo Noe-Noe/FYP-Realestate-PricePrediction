@@ -9,7 +9,11 @@ import './RespondToFeedback.css';
 const RespondToFeedback = () => {
   const { feedbackId } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('feedback');
+  
+  // Determine active tab based on URL type parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const type = urlParams.get('type') || 'review';
+  const [activeTab, setActiveTab] = useState(type === 'review' ? 'review' : 'feedback');
   
   // State for feedback data
   const [feedback, setFeedback] = useState(null);
@@ -36,6 +40,10 @@ const RespondToFeedback = () => {
   // Fetch feedback data on component mount
   useEffect(() => {
     if (feedbackId) {
+      // Update activeTab when component mounts based on URL type
+      const currentUrlParams = new URLSearchParams(window.location.search);
+      const currentType = currentUrlParams.get('type') || 'review';
+      setActiveTab(currentType === 'review' ? 'review' : 'feedback');
       fetchFeedbackData();
     }
   }, [feedbackId]);
@@ -45,8 +53,12 @@ const RespondToFeedback = () => {
       setLoading(true);
       setError(null);
       
-      // Fetch feedback details by ID
-      const feedbackResponse = await authAPI.getFeedbackById(feedbackId);
+      // Check URL params to determine if this is a review or feedback
+      const urlParams = new URLSearchParams(window.location.search);
+      const type = urlParams.get('type') || 'review';
+      
+      // Fetch feedback/review details by ID
+      const feedbackResponse = await authAPI.getFeedbackById(feedbackId, type);
       setFeedback(feedbackResponse);
       
       // If there's already an admin response, populate it
@@ -84,12 +96,18 @@ const RespondToFeedback = () => {
       
       setSubmitting(true);
       
-      // Call the API to respond to feedback
-      await authAPI.respondToFeedback(feedbackId, finalResponse);
+      // Check URL params to determine type
+      const urlParams = new URLSearchParams(window.location.search);
+      const type = urlParams.get('type') || 'review';
       
-      // Show success message and redirect back to feedback management
-      alert('Response sent successfully!');
-      navigate('/dashboard/feedback-management');
+      // Call the API to respond to feedback/review
+      await authAPI.respondToFeedback(feedbackId, finalResponse, type);
+      
+      // Reload feedback data to show the updated response
+      await fetchFeedbackData();
+      
+      // Show success message but stay on page to allow viewing/editing
+      alert('Response sent successfully! You can continue viewing or editing the response.');
       
     } catch (error) {
       console.error('Failed to send response:', error);
@@ -100,7 +118,15 @@ const RespondToFeedback = () => {
   };
 
   const handleCancel = () => {
+    // Check URL params to determine if this is from review or feedback management
+    const urlParams = new URLSearchParams(window.location.search);
+    const type = urlParams.get('type');
+    
+    if (type === 'review') {
+      navigate('/dashboard/review-management');
+    } else {
     navigate('/dashboard/feedback-management');
+    }
   };
 
   const renderStars = (rating) => {
@@ -169,37 +195,73 @@ const RespondToFeedback = () => {
         <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
         <main className="user-main-content">
           <div className="user-content-header" style={{ marginBottom: 0 }}>
-            <h1 className="user-main-title">Respond to Feedback</h1>
+            <h1 className="user-main-title">
+              {(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const type = urlParams.get('type');
+                return type === 'review' ? 'Respond to Review' : 'Respond to Feedback';
+              })()}
+            </h1>
           </div>
           
           <div className="respond-feedback-content">
             {/* Feedback Preview Section */}
             <section className="respond-feedback-preview-section">
-              <h2>Feedback Details</h2>
+              <h2>{feedback?.rating ? 'Review' : 'Feedback'} Details</h2>
               <div className="respond-feedback-preview-card">
                 <div className="respond-feedback-user-info">
                   <h3>From: {feedback.user_name}</h3>
                   <p className="respond-feedback-user-email">{feedback.user_email}</p>
                   <p className="respond-feedback-date">
-                    Submitted: {feedback.review_date ? new Date(feedback.review_date).toLocaleDateString() : 'No date'}
+                    Submitted: {(feedback.review_date || feedback.created_at) ? new Date(feedback.review_date || feedback.created_at).toLocaleDateString() : 'No date'}
                   </p>
                 </div>
                 
+                {feedback.rating && (
                 <div className="respond-feedback-rating">
                   <span>Rating: </span>
                   {renderStars(feedback.rating)}
                 </div>
+                )}
+                
+                {feedback.inquiry_type && (
+                  <div className="respond-feedback-inquiry-type">
+                    <span>Type: </span>
+                    <span className="respond-feedback-inquiry-type-badge">
+                      {(() => {
+                        switch(feedback.inquiry_type) {
+                          case 'general': return 'General Feedback';
+                          case 'support': return 'Support Request';
+                          case 'property_viewing': return 'Property Viewing Inquiry';
+                          case 'price_quote': return 'Price Quote Request';
+                          default: return feedback.inquiry_type;
+                        }
+                      })()}
+                    </span>
+                  </div>
+                )}
+                
+                {feedback.status && (
+                  <div className="respond-feedback-status">
+                    <span>Status: </span>
+                    <span className={`respond-feedback-status-badge ${feedback.status}`}>
+                      {feedback.status.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+                )}
                 
                 <div className="respond-feedback-text">
-                  <h4>Feedback:</h4>
-                  <p>"{feedback.review_text}"</p>
+                  <h4>{feedback.rating ? 'Review:' : 'Message:'}</h4>
+                  <p>"{feedback.review_text || feedback.message}"</p>
                 </div>
                 
-                <div className="respond-feedback-status">
+                {feedback.is_verified !== undefined && (
+                  <div className="respond-feedback-verification-status">
                   <span className={`respond-feedback-status-badge ${feedback.is_verified ? 'verified' : 'pending'}`}>
                     {feedback.is_verified ? 'Verified' : 'Pending Verification'}
                   </span>
                 </div>
+                )}
               </div>
             </section>
 

@@ -16,8 +16,14 @@ const Navbar = ({ activeTab, setActiveTab }) => {
       return [
         { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
         { id: 'user-accounts', label: 'User Accounts', icon: '👥' },
+        { id: 'properties', label: 'Properties', icon: '🏢' },
         { id: 'feedback', label: 'Feedback', icon: '💬' },
-        { id: 'content', label: 'Content', icon: '📄' }
+<<<<<<< HEAD
+=======
+        { id: 'review', label: 'Review', icon: '⭐' },
+>>>>>>> Mandy
+        { id: 'content', label: 'Content', icon: '📄' },
+        { id: 'regions', label: 'Regions', icon: '📍' }
       ];
     } else if (userType === 'agent') {
       return [
@@ -26,6 +32,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
         { id: 'regions', label: 'Regions', icon: '📍' },
         { id: 'support', label: 'Support', icon: '❓' },
         { id: 'feedback', label: 'Feedback', icon: '💬' },
+        { id: 'review', label: 'Review', icon: '⭐' },
         { id: 'profile', label: 'Profile', icon: '👤' }
       ];
     } else {
@@ -37,6 +44,8 @@ const Navbar = ({ activeTab, setActiveTab }) => {
         { id: 'bookmarks', label: 'Bookmarks', icon: '🔖' },
         { id: 'support', label: 'Support', icon: '❓' },
         { id: 'feedback', label: 'Feedback', icon: '💬' },
+        { id: 'review', label: 'Review', icon: '⭐' },
+        { id: 'preferences', label: 'Preferences', icon: '⚙️' },
         { id: 'profile', label: 'Profile', icon: '👤' }
       ];
     }
@@ -68,13 +77,25 @@ const Navbar = ({ activeTab, setActiveTab }) => {
           console.log('Navigating to dashboard/user-accounts');
           navigate('/dashboard/user-accounts');
           break;
+        case 'properties':
+          console.log('Navigating to dashboard/property-management');
+          navigate('/dashboard/property-management');
+          break;
         case 'feedback':
           console.log('Navigating to dashboard/feedback-management');
           navigate('/dashboard/feedback-management');
           break;
+        case 'review':
+          console.log('Navigating to dashboard/review-management');
+          navigate('/dashboard/review-management');
+          break;
         case 'content':
           console.log('Navigating to dashboard/content-management');
           navigate('/dashboard/content-management');
+          break;
+        case 'regions':
+          console.log('Navigating to dashboard/regions-management');
+          navigate('/dashboard/regions-management');
           break;
         default:
           break;
@@ -96,6 +117,9 @@ const Navbar = ({ activeTab, setActiveTab }) => {
           break;
         case 'feedback':
           navigate('/feedback');
+          break;
+        case 'review':
+          navigate('/review');
           break;
         case 'profile':
           navigate('/profile');
@@ -126,6 +150,12 @@ const Navbar = ({ activeTab, setActiveTab }) => {
           break;
         case 'feedback':
           navigate('/feedback');
+          break;
+        case 'review':
+          navigate('/review');
+          break;
+        case 'preferences':
+          navigate('/preferences');
           break;
         case 'profile':
           navigate('/profile');

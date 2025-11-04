@@ -9,7 +9,7 @@ import { faqAPI, contactAPI, legalAPI, supportAPI } from '../../services/api';
 
 // Import actual landing page components
 import Hero from '../landing-page/Hero';
-import Explore from '../landing-page/Explore';
+import HowItWorks from '../landing-page/HowItWorks';
 import Features from '../landing-page/Features';
 import Reviews from '../landing-page/Reviews';
 import SubscriptionPlans from '../landing-page/SubscriptionPlans';
@@ -217,21 +217,18 @@ We may update this Privacy Policy from time to time. We will notify you of any c
       
       {/* Hero Section */}
       <div className="content-preview-landing-section">
-        <h4 className="content-preview-section-subtitle">Hero Section</h4>
         <Hero />
       </div>
 
-      {/* Explore Section */}
+      {/* How It Works Section */}
       <div className="content-preview-landing-section">
-        <h4 className="content-preview-section-subtitle">Explore Section</h4>
-        <div className="section-shadow">
-          <Explore />
+        <div className="section-shadow" id="howitworks">
+          <HowItWorks />
         </div>
       </div>
 
       {/* Features Section */}
       <div className="content-preview-landing-section">
-        <h4 className="content-preview-section-subtitle">How It Works Section</h4>
         <div className="section-shadow">
           <Features />
         </div>
@@ -239,7 +236,6 @@ We may update this Privacy Policy from time to time. We will notify you of any c
 
       {/* Reviews Section */}
       <div className="content-preview-landing-section">
-        <h4 className="content-preview-section-subtitle">Reviews Section</h4>
         <div className="section-shadow">
           <Reviews />
         </div>
@@ -247,7 +243,6 @@ We may update this Privacy Policy from time to time. We will notify you of any c
 
       {/* Subscription Plans Section */}
       <div className="content-preview-landing-section">
-        <h4 className="content-preview-section-subtitle">Subscription Plans Section</h4>
         <div className="section-shadow">
           <SubscriptionPlans />
         </div>
@@ -255,7 +250,6 @@ We may update this Privacy Policy from time to time. We will notify you of any c
 
       {/* FAQ Section */}
       <div className="content-preview-landing-section">
-        <h4 className="content-preview-section-subtitle">FAQ Section</h4>
         <div className="section-shadow">
           <FAQ />
         </div>
@@ -263,7 +257,6 @@ We may update this Privacy Policy from time to time. We will notify you of any c
 
       {/* Team Section */}
       <div className="content-preview-landing-section">
-        <h4 className="content-preview-section-subtitle">Our Team Section</h4>
         <div className="section-shadow">
           <Team />
         </div>
@@ -271,7 +264,6 @@ We may update this Privacy Policy from time to time. We will notify you of any c
 
       {/* Footer */}
       <div className="content-preview-landing-section">
-        <h4 className="content-preview-section-subtitle">Footer</h4>
         <LandingFooter />
       </div>
     </div>

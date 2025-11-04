@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GOOGLE_MAPS_API_KEY } from '../../config/maps';
 import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import PropertyCard from './PropertyCard';
-import { bookmarksAPI } from '../../services/api';
+import { bookmarksAPI, predictionAPI, propertyCardAPI } from '../../services/api';
 import './prediction.css';
 
 const GOOGLE_MAPS_LIBRARIES = ['places', 'geometry'];
@@ -61,6 +61,10 @@ const Prediction = () => {
   const [amenitiesError, setAmenitiesError] = useState('');
   const [isAddressBookmarked, setIsAddressBookmarked] = useState(false);
   const [isPredictionBookmarked, setIsPredictionBookmarked] = useState(false);
+  const [mlPredictionData, setMlPredictionData] = useState(null);
+  const [isLoadingMlPrediction, setIsLoadingMlPrediction] = useState(false);
+  const [mlPredictionError, setMlPredictionError] = useState('');
+  const [propertyCardData, setPropertyCardData] = useState({ nearbyProperties: [], regionAgents: [] });
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -77,6 +81,79 @@ const Prediction = () => {
 
   // Check if the address was originally a postal code
   const isPostalCodeSearch = /^\d{6}$/.test(searchData.address.split(',')[0].trim());
+
+  // Call ML prediction API when component loads
+  useEffect(() => {
+    const generateMlPrediction = async () => {
+      if (!searchData.address || !searchData.propertyType || !searchData.floorArea) {
+        return;
+      }
+
+      setIsLoadingMlPrediction(true);
+      setMlPredictionError('');
+
+      try {
+        // Prepare property data for ML prediction
+        const propertyData = {
+          propertyType: searchData.propertyType,
+          address: searchData.address,
+          floorArea: searchData.floorArea,
+          level: searchData.level || 'Ground Floor',
+          unit: searchData.unit || 'N/A'
+        };
+
+        // Check if user is authenticated
+        const token = localStorage.getItem('accessToken');
+        const useTestEndpoint = !token;
+
+        // Call the appropriate ML prediction API
+        const response = useTestEndpoint 
+          ? await predictionAPI.predictPriceTest(propertyData)
+          : await predictionAPI.predictPrice(propertyData);
+
+        if (response.success) {
+          setMlPredictionData({
+            property_data: response.property_data,
+            comparison_data: response.comparison_data,
+            matched_address: response.matched_address
+          });
+        } else {
+          setMlPredictionError('Failed to generate ML prediction');
+        }
+      } catch (error) {
+        console.error('ML prediction error:', error);
+        
+        // Check if it's a prediction limit error
+        if (error.response && error.response.data) {
+          const errorData = error.response.data;
+          if (errorData.error === 'prediction_limit_reached' || errorData.upgrade_required) {
+            setMlPredictionError(`limit_reached:${errorData.message || 'You have reached your free prediction limit.'}`);
+            // Show upgrade prompt
+            const upgradeConfirmed = window.confirm(
+              `${errorData.message || 'You have reached your free prediction limit (3 searches).'}\n\n` +
+              `Would you like to upgrade to Premium for unlimited predictions?`
+            );
+            if (upgradeConfirmed) {
+              navigate('/profile', { state: { showSubscriptionModal: true } });
+            }
+            return;
+          }
+        }
+        
+        if (error.message.includes('Invalid token') || error.message.includes('Token expired')) {
+          setMlPredictionError('Please log in to get AI-powered predictions');
+        } else if (error.message.includes('Authorization token required')) {
+          setMlPredictionError('Please log in to get AI-powered predictions');
+        } else {
+          setMlPredictionError('AI prediction temporarily unavailable: ' + (error.message || 'Unknown error'));
+        }
+      } finally {
+        setIsLoadingMlPrediction(false);
+      }
+    };
+
+    generateMlPrediction();
+  }, [searchData.address, searchData.propertyType, searchData.floorArea]);
 
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
@@ -421,48 +498,45 @@ const Prediction = () => {
     }
   };
 
-  const handleDownloadReport = () => {
-    // Create a comprehensive report with all prediction data
-    const reportData = {
-      propertyAddress: searchData.address,
-      propertyType: searchData.propertyType,
-      floorArea: searchData.floorArea,
-      prediction: {
-        estimatedValue: '$2.5M - $2.8M',
-        conservative: '$2.5M - $2.8M',
-        aggressive: '$2.5K - $2.8K'
-      },
-      propertyDetails: {
-        landArea: '1,000 sqft',
-        builtUpArea: '1,500 sqft',
-        yearOfCompletion: '2000',
-        tenure: '99 years',
-        zoning: 'B2',
-        district: '22',
-        storeys: '3',
-        units: '10',
-        occupancyRate: '90%'
-      },
-      marketTrends: {
-        priceChange: '+5%',
-        period: 'Last 12 months (YoY)'
-      },
-      similarProperties: similarProperties,
-      amenities: amenities,
-      generatedAt: new Date().toISOString()
-    };
-
-    // Create and download the report
-    const reportBlob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(reportBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `prediction-report-${searchData.address.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleDownloadReport = async (e) => {
+    // Prevent any navigation or event bubbling
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Check if user is free - show upgrade message
+    const userType = localStorage.getItem('userType') || 'free';
+    if (userType.toLowerCase() === 'free') {
+      alert('Report download is not available for free users. Please upgrade to Premium to download reports.');
+      return;
+    }
+    
+    try {
+      // Prepare data for Excel export
+      const exportData = {
+        property: searchData,
+        comparisonData: predictionData,
+        mlPredictionData: mlPredictionData,
+        nearbyProperties: propertyCardData.nearbyProperties || [],
+        regionAgents: propertyCardData.regionAgents || []
+      };
+      
+      await propertyCardAPI.exportExcel(exportData);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      const errorMessage = error.message || 'Failed to download report. Please try again.';
+      if (errorMessage.includes('upgrade') || errorMessage.includes('free users')) {
+        alert(errorMessage);
+      } else {
+        alert('Failed to download report. Please try again.');
+      }
+    }
   };
+
+  const handlePropertyCardDataUpdate = useCallback((data) => {
+    setPropertyCardData(data);
+  }, []); // Empty deps - we only want to update state, not recreate the function
 
   const handleBookmarkAddress = async () => {
     try {
@@ -562,14 +636,25 @@ const Prediction = () => {
               <span className="prediction-btn-icon">🔖</span>
               {isPredictionBookmarked ? 'Prediction Saved' : 'Bookmark Prediction'}
             </button>
-            <button 
-              className="prediction-action-btn prediction-download-btn"
-              onClick={handleDownloadReport}
-              title="Download prediction report"
-            >
-              <span className="prediction-btn-icon">📥</span>
-              Download Report
-            </button>
+            {(() => {
+              const userType = localStorage.getItem('userType') || 'free';
+              const isFreeUser = userType.toLowerCase() === 'free';
+              
+              if (isFreeUser) {
+                return null; // Hide download button for free users
+              }
+              
+              return (
+                <button 
+                  className="prediction-action-btn prediction-download-btn"
+                  onClick={handleDownloadReport}
+                  title="Download prediction report"
+                >
+                  <span className="prediction-btn-icon">📥</span>
+                  Download Report
+                </button>
+              );
+            })()}
           </div>
           
           {/* Property Card with all details */}
@@ -579,6 +664,8 @@ const Prediction = () => {
             activeMapTab={activeMapTab}
             onMapTabChange={handleMapTabChange}
             mapId="prediction-map"
+            // ML prediction data
+            mlPredictionData={mlPredictionData}
             // Amenities props
             amenities={amenities}
             selectedAmenityTypes={selectedAmenityTypes}
@@ -586,6 +673,8 @@ const Prediction = () => {
             isLoadingAmenities={isLoadingAmenities}
             amenitiesError={amenitiesError}
             amenityOptions={AMENITY_OPTIONS}
+            // Data callback for export
+            onDataUpdate={handlePropertyCardDataUpdate}
           />
           
 

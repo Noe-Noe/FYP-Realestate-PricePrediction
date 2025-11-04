@@ -282,7 +282,18 @@ COMMENT ON COLUMN property_views.user_id IS 'User ID if logged in, NULL for anon
 COMMENT ON COLUMN property_views.ip_address IS 'IP address for anonymous view tracking';
 COMMENT ON COLUMN property_views.viewed_at IS 'Timestamp when the property was viewed';
 
--- Agent regions
+-- Regions table (master list of available regions)
+CREATE TABLE regions (
+    id SERIAL PRIMARY KEY,
+    district VARCHAR(10) NOT NULL,
+    sector VARCHAR(100) NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Agent regions (assignments of agents to regions)
 CREATE TABLE agent_regions (
     id SERIAL PRIMARY KEY,
     agent_id INTEGER NOT NULL,
@@ -340,6 +351,7 @@ CREATE TABLE IF NOT EXISTS howitworks_properties (
 CREATE TABLE IF NOT EXISTS features_section (
     id INTEGER PRIMARY KEY DEFAULT 1,
     section_title VARCHAR(255) NOT NULL DEFAULT 'How it Works',
+    tutorial_video_url VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -350,6 +362,7 @@ CREATE TABLE IF NOT EXISTS features_steps (
     step_title VARCHAR(255) NOT NULL,
     step_description TEXT NOT NULL,
     step_image VARCHAR(500),
+    step_video VARCHAR(500),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -491,6 +504,108 @@ CREATE TRIGGER update_business_inquiries_updated_at BEFORE UPDATE ON business_in
 -- Update team_members.image_url to TEXT to support base64 data URLs
 ALTER TABLE team_members ALTER COLUMN image_url TYPE TEXT;
 
+-- Schools table (for property nearby schools data)
+CREATE TABLE IF NOT EXISTS schools (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    school_type VARCHAR(50) NOT NULL CHECK (school_type IN ('primary', 'secondary', 'junior_college', 'university')),
+    address VARCHAR(500) NOT NULL,
+    latitude NUMERIC(10,8) NOT NULL,
+    longitude NUMERIC(11,8) NOT NULL,
+    postal_code VARCHAR(10),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Amenities table (for property nearby amenities data)
+CREATE TABLE IF NOT EXISTS amenities (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    amenity_type VARCHAR(50) NOT NULL CHECK (amenity_type IN ('shopping', 'healthcare', 'transport', 'recreation', 'dining')),
+    address VARCHAR(500) NOT NULL,
+    latitude NUMERIC(10,8) NOT NULL,
+    longitude NUMERIC(11,8) NOT NULL,
+    postal_code VARCHAR(10),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User profiles table (for user personalization and trial tracking)
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL UNIQUE,
+    search_history JSONB,
+    click_tracking JSONB,
+    view_duration JSONB,
+    preferences_updated_at TIMESTAMP,
+    trial_used BOOLEAN DEFAULT FALSE,
+    trial_start_date TIMESTAMP,
+    trial_end_date TIMESTAMP,
+    trial_predictions_used INTEGER DEFAULT 0,
+    max_trial_predictions INTEGER DEFAULT 1,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Feedback form types table (for admin feedback form management)
+CREATE TABLE IF NOT EXISTS feedback_form_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    value VARCHAR(50) UNIQUE NOT NULL,
+    status VARCHAR(20) DEFAULT 'active',
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User interactions table (for tracking user interactions)
+CREATE TABLE IF NOT EXISTS user_interactions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER,
+    interaction_type VARCHAR(50) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_id INTEGER,
+    target_data JSONB,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Reviews table (alternative reviews table with more fields than user_reviews)
+CREATE TABLE IF NOT EXISTS reviews (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    review_type VARCHAR(50) NOT NULL,
+    target_id INTEGER,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    review_text TEXT NOT NULL,
+    category VARCHAR(50) DEFAULT 'general',
+    is_verified BOOLEAN DEFAULT FALSE,
+    is_published BOOLEAN DEFAULT FALSE,
+    likes INTEGER DEFAULT 0,
+    dislikes INTEGER DEFAULT 0,
+    admin_response TEXT,
+    admin_response_date TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Add triggers for updated_at on new tables
+CREATE TRIGGER update_schools_updated_at BEFORE UPDATE ON schools
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_amenities_updated_at BEFORE UPDATE ON amenities
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_feedback_form_types_updated_at BEFORE UPDATE ON feedback_form_types
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_reviews_updated_at BEFORE UPDATE ON reviews
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 INSERT INTO howitworks_properties
   (id, property_order, title, address, level, unit_area, property_type, image_url, is_active)
 VALUES
@@ -500,3 +615,24 @@ INSERT INTO howitworks_properties (id, property_order, title, address, level, un
   (2, 2, 'Sample Title 2', '456 Example Ave', 'Level 5', '85 sqm', 'Condo', NULL, true),
   (3, 3, 'Sample Title 3', '789 Example Rd', 'Level 10', '120 sqm', 'HDB', NULL, true)
 ON CONFLICT (id) DO NOTHING;
+
+-- INSERT SYSTEM ADMIN
+-- Default password: admin123 (should be changed after first login)
+INSERT INTO users (
+    email, 
+    password_hash, 
+    full_name, 
+    user_type, 
+    subscription_status, 
+    is_active, 
+    first_time_user
+) VALUES (
+    'admin@valuez.com',
+    'scrypt:32768:8:1$EvQ3WgiKJWICrQJm$1e60455268a09a90c6ffa7aad1f3599d0fff4d0cd23aba43b1a23b668ad33a65e3042ed9edd1761a3d2f4582a61e67f2b261887876d1a07cb5a31a124a8c36e9',
+    'System Administrator',
+    'admin',
+    'active',
+    TRUE,
+    FALSE
+)
+ON CONFLICT (email) DO NOTHING;

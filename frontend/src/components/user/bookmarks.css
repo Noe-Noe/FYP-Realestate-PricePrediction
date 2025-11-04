@@ -9,12 +9,38 @@
   letter-spacing: -0.025em;
 }
 
-/* Bookmarks Grid */
+/* Bookmarks Grid - Horizontal Scrolling */
 .bookmarks-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  display: flex;
+  flex-direction: row;
   gap: 2rem;
   margin-bottom: 3rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 1rem 0;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar for cleaner look but keep functionality */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.bookmarks-grid::-webkit-scrollbar {
+  height: 8px;
+}
+
+.bookmarks-grid::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.bookmarks-grid::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.bookmarks-grid::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Bookmark Cards */
@@ -28,6 +54,9 @@
   border: 1px solid #f1f5f9;
   padding: 0;
   text-align: left;
+  flex: 0 0 320px; /* Fixed width, don't shrink or grow */
+  min-width: 320px; /* Minimum width */
+  max-width: 320px; /* Maximum width */
 }
 
 .bookmark-card:hover {
@@ -556,9 +585,14 @@
 
 /* Responsive Design */
 @media (max-width: 1024px) {
+  .bookmark-card {
+    flex: 0 0 280px;
+    min-width: 280px;
+    max-width: 280px;
+  }
+  
   .bookmarks-grid {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1rem;
+    gap: 1.5rem;
   }
   
   .bookmarks-main-content {
@@ -571,8 +605,13 @@
     flex-direction: column;
   }
   
+  .bookmark-card {
+    flex: 0 0 260px;
+    min-width: 260px;
+    max-width: 260px;
+  }
+  
   .bookmarks-grid {
-    grid-template-columns: 1fr;
     gap: 1rem;
   }
   
@@ -588,6 +627,17 @@
   
   .bookmarks-section-title {
     font-size: 1.125rem;
+  }
+  
+  .bookmark-card {
+    flex: 0 0 240px;
+    min-width: 240px;
+    max-width: 240px;
+  }
+  
+  .bookmarks-grid {
+    gap: 0.75rem;
+    padding: 0.5rem 0;
   }
   
   .card-content {

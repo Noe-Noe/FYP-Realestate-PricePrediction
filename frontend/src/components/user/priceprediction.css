@@ -523,3 +523,149 @@
     width: 100%;
   }
 }
+
+/* Upgrade Modal Styles */
+.price-prediction-upgrade-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.price-prediction-upgrade-modal {
+  background: white;
+  border-radius: 16px;
+  padding: 0;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.price-prediction-upgrade-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.price-prediction-upgrade-modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.price-prediction-upgrade-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.price-prediction-upgrade-modal-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.price-prediction-upgrade-modal-content {
+  padding: 1.5rem;
+}
+
+.price-prediction-upgrade-message {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 1rem 0;
+}
+
+.price-prediction-upgrade-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.5;
+}
+
+.price-prediction-upgrade-features {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.price-prediction-upgrade-feature {
+  padding: 0.5rem 0;
+  font-size: 0.875rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.price-prediction-upgrade-modal-actions {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+}
+
+.price-prediction-upgrade-btn-cancel,
+.price-prediction-upgrade-btn-confirm {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.price-prediction-upgrade-btn-cancel {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.price-prediction-upgrade-btn-cancel:hover {
+  background: #e5e7eb;
+}
+
+.price-prediction-upgrade-btn-confirm {
+  background: #3b82f6;
+  color: white;
+}
+
+.price-prediction-upgrade-btn-confirm:hover {
+  background: #2563eb;
+}
+
+@media (max-width: 768px) {
+  .price-prediction-upgrade-modal {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .price-prediction-upgrade-modal-actions {
+    flex-direction: column;
+  }
+
+  .price-prediction-upgrade-btn-cancel,
+  .price-prediction-upgrade-btn-confirm {
+    width: 100%;
+  }
+}

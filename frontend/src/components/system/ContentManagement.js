@@ -67,6 +67,12 @@ const ContentManagement = () => {
       title: 'Subscription Plans',
       description: 'Manage subscription plans, pricing, and features.',
       category: 'Landing Page'
+    },
+    {
+      id: 'feedback-form',
+      title: 'Feedback Form',
+      description: 'Manage feedback form types and their availability.',
+      category: 'Other Information'
     }
   ];
 
@@ -93,6 +99,8 @@ const ContentManagement = () => {
       window.location.href = '/dashboard/edit-privacy-policy';
     } else if (sectionId === 'subscription-plans') {
       window.location.href = '/dashboard/edit-subscription-plans';
+    } else if (sectionId === 'feedback-form') {
+      window.location.href = '/dashboard/edit-feedback-form';
     } else {
       window.location.href = `/dashboard/edit-section/${sectionId}`;
     }

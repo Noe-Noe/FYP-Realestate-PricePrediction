@@ -12,6 +12,9 @@ const UserDetails = () => {
   const [activeTab, setActiveTab] = useState('user-accounts');
   const [user, setUser] = useState(null);
   const [notes, setNotes] = useState('');
+  const [editingUserType, setEditingUserType] = useState(false);
+  const [selectedUserType, setSelectedUserType] = useState('');
+  const [savingUserType, setSavingUserType] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,7 +25,6 @@ const UserDetails = () => {
       id: 1,
       name: 'Ethan Harper',
       email: 'ethan.harper@example.com',
-      referralCode: 'REF123',
       subscriptionStatus: 'Premium',
       accountCreatedDate: '2023-01-15',
       accountStatus: 'Active',
@@ -40,7 +42,6 @@ const UserDetails = () => {
       id: 2,
       name: 'Olivia Bennett',
       email: 'olivia.bennett@example.com',
-      referralCode: 'REF456',
       subscriptionStatus: 'Free',
       accountCreatedDate: '2023-02-20',
       accountStatus: 'Active',
@@ -56,7 +57,6 @@ const UserDetails = () => {
       id: 3,
       name: 'Liam Carter',
       email: 'liam.carter@example.com',
-      referralCode: 'REF789',
       subscriptionStatus: 'Agent',
       accountCreatedDate: '2023-03-10',
       accountStatus: 'Active',
@@ -78,6 +78,7 @@ const UserDetails = () => {
         
         const userData = await authAPI.getUserById(userId);
         setUser(userData);
+        setSelectedUserType(userData.user_type || 'free');
         
       } catch (err) {
         console.error('Error fetching user details:', err);
@@ -164,6 +165,50 @@ const UserDetails = () => {
     } catch (error) {
       console.error('Error reactivating user:', error);
       alert(`Failed to reactivate user: ${error.message}`);
+    }
+  };
+
+  const handleEditUserType = () => {
+    setEditingUserType(true);
+    setSelectedUserType(user.user_type || 'free');
+  };
+
+  const handleCancelEditUserType = () => {
+    setEditingUserType(false);
+    setSelectedUserType(user.user_type || 'free');
+  };
+
+  const handleSaveUserType = async () => {
+    if (selectedUserType === user.user_type) {
+      setEditingUserType(false);
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to change ${user.full_name}'s user type from ${user.user_type} to ${selectedUserType}?`)) {
+      return;
+    }
+
+    try {
+      setSavingUserType(true);
+      
+      const response = await authAPI.updateUser(user.id, {
+        user_type: selectedUserType
+      });
+      
+      // Update local user state
+      setUser(prevUser => ({
+        ...prevUser,
+        user_type: selectedUserType
+      }));
+      
+      setEditingUserType(false);
+      alert('User type updated successfully');
+      
+    } catch (error) {
+      console.error('Error updating user type:', error);
+      alert(`Failed to update user type: ${error.message || 'Unknown error'}`);
+    } finally {
+      setSavingUserType(false);
     }
   };
 
@@ -291,14 +336,51 @@ const UserDetails = () => {
                   <span>{user.email}</span>
                 </div>
                 <div className="user-details-info-item">
-                  <label>Referral Code:</label>
-                  <span>{user.referral_code || (user.user_type === 'premium' ? 'Generating...' : 'N/A')}</span>
-                </div>
-                <div className="user-details-info-item">
                   <label>User Type:</label>
+                  {editingUserType ? (
+                    <div className="user-details-user-type-edit">
+                      <select
+                        className="user-details-user-type-select"
+                        value={selectedUserType}
+                        onChange={(e) => setSelectedUserType(e.target.value)}
+                        disabled={savingUserType}
+                      >
+                        <option value="free">Free</option>
+                        <option value="premium">Premium</option>
+                        <option value="agent">Agent</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <div className="user-details-user-type-actions">
+                        <button
+                          className="user-details-user-type-save-btn"
+                          onClick={handleSaveUserType}
+                          disabled={savingUserType}
+                        >
+                          {savingUserType ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          className="user-details-user-type-cancel-btn"
+                          onClick={handleCancelEditUserType}
+                          disabled={savingUserType}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="user-details-user-type-display">
                   <span className={getSubscriptionBadgeClass(user.user_type)}>
                     {user.user_type}
                   </span>
+                      <button
+                        className="user-details-edit-user-type-btn"
+                        onClick={handleEditUserType}
+                        title="Change user type"
+                      >
+                        ✏️ Edit
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="user-details-info-item">
                   <label>Account Created Date:</label>

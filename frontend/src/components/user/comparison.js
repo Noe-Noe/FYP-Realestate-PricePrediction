@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GOOGLE_MAPS_API_KEY } from '../../config/maps';
 import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import PropertyCard from './PropertyCard';
-import { bookmarksAPI } from '../../services/api';
+import { bookmarksAPI, predictionAPI, propertyCardAPI } from '../../services/api';
 import './comparison.css';
 
 const GOOGLE_MAPS_LIBRARIES = ['places', 'geometry'];
@@ -68,6 +68,14 @@ const Comparison = () => {
   const [isComparisonBookmarked, setIsComparisonBookmarked] = useState(false);
   const [isPropertyBookmarked, setIsPropertyBookmarked] = useState(false);
   
+  // ML prediction data for both properties
+  const [property1MlData, setProperty1MlData] = useState(null);
+  const [property2MlData, setProperty2MlData] = useState(null);
+  const [isLoadingMlPredictions, setIsLoadingMlPredictions] = useState(false);
+  const [mlPredictionError, setMlPredictionError] = useState('');
+  const [property1CardData, setProperty1CardData] = useState({ nearbyProperties: [], regionAgents: [] });
+  const [property2CardData, setProperty2CardData] = useState({ nearbyProperties: [], regionAgents: [] });
+  
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -96,6 +104,73 @@ const Comparison = () => {
       unit: 'A1'
     }
   ];
+
+  // Generate ML predictions for both properties
+  useEffect(() => {
+    const generateMlPredictions = async () => {
+      if (!properties[0] || !properties[1]) return;
+
+      setIsLoadingMlPredictions(true);
+      setMlPredictionError('');
+
+      try {
+        // Check if user is authenticated
+        const token = localStorage.getItem('accessToken');
+        const useTestEndpoint = !token;
+
+        // Generate predictions for both properties in parallel
+        const [property1Response, property2Response] = await Promise.allSettled([
+          // Property 1 prediction
+          (useTestEndpoint ? predictionAPI.predictPriceTest : predictionAPI.predictPrice)({
+            propertyType: properties[0].propertyType,
+            address: properties[0].address,
+            floorArea: properties[0].floorArea,
+            level: properties[0].level || 'Ground Floor',
+            unit: properties[0].unit || 'N/A'
+          }),
+          // Property 2 prediction
+          (useTestEndpoint ? predictionAPI.predictPriceTest : predictionAPI.predictPrice)({
+            propertyType: properties[1].propertyType,
+            address: properties[1].address,
+            floorArea: properties[1].floorArea,
+            level: properties[1].level || 'Ground Floor',
+            unit: properties[1].unit || 'N/A'
+          })
+        ]);
+
+        // Handle Property 1 response
+        if (property1Response.status === 'fulfilled' && property1Response.value.success) {
+          setProperty1MlData({
+            property_data: property1Response.value.property_data,
+            comparison_data: property1Response.value.comparison_data,
+            matched_address: property1Response.value.matched_address
+          });
+        }
+
+        // Handle Property 2 response
+        if (property2Response.status === 'fulfilled' && property2Response.value.success) {
+          setProperty2MlData({
+            property_data: property2Response.value.property_data,
+            comparison_data: property2Response.value.comparison_data,
+            matched_address: property2Response.value.matched_address
+          });
+        }
+
+        // Check for errors
+        if (property1Response.status === 'rejected' || property2Response.status === 'rejected') {
+          setMlPredictionError('Some predictions failed to generate');
+        }
+
+      } catch (error) {
+        console.error('ML prediction error:', error);
+        setMlPredictionError('AI predictions temporarily unavailable');
+      } finally {
+        setIsLoadingMlPredictions(false);
+      }
+    };
+
+    generateMlPredictions();
+  }, [properties]);
 
   // Mock detailed comparison data
   const comparisonData = {
@@ -264,10 +339,59 @@ const Comparison = () => {
     }
   };
 
-  const handleDownloadReport = () => {
-    // Download functionality
-    console.log('Downloading report...');
+  const handleDownloadReport = async (e) => {
+    // Prevent any navigation or event bubbling
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Check if user is free - show upgrade message
+    const userType = localStorage.getItem('userType') || 'free';
+    if (userType.toLowerCase() === 'free') {
+      alert('Report download is not available for free users. Please upgrade to Premium to download reports.');
+      return;
+    }
+    
+    try {
+      // Prepare data for Excel export - comparison mode with both properties
+      const exportData = {
+        isComparison: true,
+        property1: {
+          property: properties[0],
+          comparisonData: comparisonData.property1,
+          mlPredictionData: property1MlData,
+          nearbyProperties: property1CardData.nearbyProperties || [],
+          regionAgents: property1CardData.regionAgents || []
+        },
+        property2: {
+          property: properties[1],
+          comparisonData: comparisonData.property2,
+          mlPredictionData: property2MlData,
+          nearbyProperties: property2CardData.nearbyProperties || [],
+          regionAgents: property2CardData.regionAgents || []
+        }
+      };
+      
+      await propertyCardAPI.exportExcel(exportData);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      const errorMessage = error.message || 'Failed to download report. Please try again.';
+      if (errorMessage.includes('upgrade') || errorMessage.includes('free users')) {
+        alert(errorMessage);
+      } else {
+        alert('Failed to download report. Please try again.');
+      }
+    }
   };
+
+  const handleProperty1CardDataUpdate = useCallback((data) => {
+    setProperty1CardData(data);
+  }, []); // Empty deps - we only want to update state, not recreate the function
+
+  const handleProperty2CardDataUpdate = useCallback((data) => {
+    setProperty2CardData(data);
+  }, []); // Empty deps - we only want to update state, not recreate the function
 
   const handleBookmarkComparison = async () => {
     try {
@@ -513,10 +637,21 @@ const Comparison = () => {
 
           {/* Action Buttons */}
           <div className="comparison-action-buttons">
-            <button className="comparison-action-btn comparison-download-btn" onClick={handleDownloadReport}>
-              <span className="comparison-btn-icon">📥</span>
-              Download Report
-            </button>
+            {(() => {
+              const userType = localStorage.getItem('userType') || 'free';
+              const isFreeUser = userType.toLowerCase() === 'free';
+              
+              if (isFreeUser) {
+                return null; // Hide download button for free users
+              }
+              
+              return (
+                <button className="comparison-action-btn comparison-download-btn" onClick={handleDownloadReport}>
+                  <span className="comparison-btn-icon">📥</span>
+                  Download Report
+                </button>
+              );
+            })()}
             <button 
               className={`comparison-action-btn comparison-bookmark-btn ${isComparisonBookmarked ? 'active' : ''}`}
               onClick={handleBookmarkComparison}
@@ -544,6 +679,8 @@ const Comparison = () => {
                activeMapTab={activeMapTab}
                onMapTabChange={handleMapTabChange}
                mapId="property1-map"
+               // ML prediction data
+               mlPredictionData={property1MlData}
                // Amenities props for Property 1
                amenities={property1Amenities}
                selectedAmenityTypes={property1SelectedTypes}
@@ -551,6 +688,8 @@ const Comparison = () => {
                isLoadingAmenities={property1LoadingAmenities}
                amenitiesError={property1AmenitiesError}
                amenityOptions={AMENITY_OPTIONS}
+               // Data callback for export
+               onDataUpdate={handleProperty1CardDataUpdate}
              />
 
              {/* VS Indicator */}
@@ -563,6 +702,8 @@ const Comparison = () => {
                activeMapTab={activeMapTab}
                onMapTabChange={handleMapTabChange}
                mapId="property2-map"
+               // ML prediction data
+               mlPredictionData={property2MlData}
                // Amenities props for Property 2
                amenities={property2Amenities}
                selectedAmenityTypes={property2SelectedTypes}
@@ -570,6 +711,8 @@ const Comparison = () => {
                isLoadingAmenities={property2LoadingAmenities}
                amenitiesError={property2AmenitiesError}
                amenityOptions={AMENITY_OPTIONS}
+               // Data callback for export
+               onDataUpdate={handleProperty2CardDataUpdate}
              />
            </div>
         </main>

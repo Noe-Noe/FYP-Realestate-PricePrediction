@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import './HowItWorks.css';
-import Navbar from './Navbar';
-import Footer from './Footer';
 import PropertyCard from '../user/PropertyCard';
 import api from '../../services/api';
 
@@ -96,15 +94,35 @@ const HowItWorks = () => {
     ];
   };
 
+  // Default fallback images for different property types
+  const getDefaultImage = (propertyType) => {
+    const images = {
+      'Commercial': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&h=600&fit=crop',
+      'Industrial': 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&h=600&fit=crop',
+      'Apartment': 'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=800&h=600&fit=crop',
+      'Condo': 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop',
+      'HDB': 'https://images.unsplash.com/photo-1551884171-b580fbadd0cd?w=800&h=600&fit=crop'
+    };
+    return images[propertyType] || images['Commercial'];
+  };
+
 
   return (
-    <div className="howitworks-page">
-      <Navbar />
-
-      <section className="how-hero">
-        <h1 className="section-title" style={{ color: '#fff', marginTop: '4rem' }}>See How it Works</h1>
-      </section>
-
+    <section className="explore">
+      <h2 className="section-title">Explore Automated Valuations</h2>
+      <div className="explore-header">
+        <p className="section-subtitle">Estimate the value of your property now</p>
+      </div>
+      <div className="explore-types">
+        <div className="type-pill">
+          <span style={{ fontSize: '1.2rem', marginRight: '0.5rem' }}>🏢</span>
+          <span>Commercial</span>
+        </div>
+        <div className="type-pill">
+          <span style={{ fontSize: '1.2rem', marginRight: '0.5rem' }}>🏭</span>
+          <span>Industrial</span>
+        </div>
+      </div>
       {/* Card Grid */}
       <section className="how-grid">
         {loading ? (
@@ -112,7 +130,17 @@ const HowItWorks = () => {
         ) : (
           cards.map(card => (
           <article className="how-card" key={card.id}>
-            <div className="how-card-image" style={{ backgroundImage: `url('${card.image}')` }} />
+            <div 
+              className="how-card-image" 
+              style={{ 
+                backgroundImage: `url('${card.image || getDefaultImage(card.type)}')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center'
+              }}
+              onError={(e) => {
+                e.target.style.backgroundImage = `url('${getDefaultImage(card.type)}')`;
+              }}
+            />
             <div className="how-card-body">
               <h3>{card.title}</h3>
               <p className="muted">{card.address}</p>
@@ -249,8 +277,8 @@ const HowItWorks = () => {
         </section>
       )}
 
-      <Footer />
-    </div>
+      
+    </section>
   );
 };
 

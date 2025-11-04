@@ -36,20 +36,46 @@ const EditSeeHowItWorks = () => {
             level: property.level,
             unitArea: property.unit_area,
             propertyType: property.property_type,
-            image: property.image_url
+            image: property.image_url,
+            isPlaceholder: false
           }));
-          setModules(transformedModules);
+          const limitedModules = transformedModules.slice(0, 4);
+
+          // Pad to exactly 4 modules with placeholders if needed
+          const placeholders = [];
+          for (let i = limitedModules.length; i < 4; i++) {
+            const slotNumber = i + 1;
+            placeholders.push({
+              id: `${slotNumber}`,
+              title: `Module ${slotNumber} (Empty)`,
+              address: '',
+              level: '',
+              unitArea: '',
+              propertyType: '',
+              image: '',
+              isPlaceholder: true,
+            });
+          }
+
+          const paddedModules = [...limitedModules, ...placeholders];
+          setModules(paddedModules);
           
           // Set initial selected module details
-          if (transformedModules.length > 0) {
+          const firstReal = paddedModules.find(m => !m.isPlaceholder);
+          if (firstReal) {
+            setSelectedModule(firstReal.id);
             setModuleDetails({
-              title: transformedModules[0].title,
-              address: transformedModules[0].address,
-              level: transformedModules[0].level,
-              unitArea: transformedModules[0].unitArea,
-              propertyType: transformedModules[0].propertyType,
-              imageUrl: transformedModules[0].image
+              title: firstReal.title,
+              address: firstReal.address,
+              level: firstReal.level,
+              unitArea: firstReal.unitArea,
+              propertyType: firstReal.propertyType,
+              imageUrl: firstReal.image
             });
+          } else if (paddedModules.length > 0) {
+            // All placeholders - select the first slot but disable saving later
+            setSelectedModule(paddedModules[0].id);
+            setModuleDetails({ title: '', address: '', level: '', unitArea: '', propertyType: '', imageUrl: '' });
           }
         }
       } catch (error) {
@@ -90,6 +116,8 @@ const EditSeeHowItWorks = () => {
       setSaving(true);
       setMessage('');
 
+      const selected = modules.find(m => String(m.id) === String(selectedModule));
+
       const propertyData = {
         title: moduleDetails.title,
         address: moduleDetails.address,
@@ -99,8 +127,30 @@ const EditSeeHowItWorks = () => {
         image_url: moduleDetails.imageUrl
       };
 
-      const response = await api.howitworks.updateProperty(selectedModule, propertyData);
-      if (response.success) {
+      let response;
+      if (selected && selected.isPlaceholder) {
+        // Create new property; property_order maps to module number if available
+        const slotIndex = modules.findIndex(m => String(m.id) === String(selectedModule));
+        const desiredOrder = slotIndex >= 0 ? slotIndex + 1 : undefined;
+        response = await api.howitworks.createProperty({ ...propertyData, property_order: desiredOrder });
+        if (response.success) {
+          // Replace placeholder with new module using returned id
+          const newId = response.id;
+          setModules(prev => prev.map((m, idx) => {
+            if (String(m.id) === String(selectedModule)) {
+              return { id: newId, title: propertyData.title, address: propertyData.address, level: propertyData.level, unitArea: propertyData.unit_area, propertyType: propertyData.property_type, image: propertyData.image_url, isPlaceholder: false };
+            }
+            return m;
+          }));
+          setSelectedModule(newId);
+        }
+      } else if (selected) {
+        response = await api.howitworks.updateProperty(selectedModule, propertyData);
+      } else {
+        setMessage('Please select a module to save.');
+        return;
+      }
+      if (response && response.success) {
         setMessage('Property updated successfully!');
         // Update local modules array
         setModules(prev => prev.map(module => 

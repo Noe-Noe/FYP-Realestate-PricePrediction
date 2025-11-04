@@ -7,93 +7,159 @@ import './feedback.css';
 
 const Feedback = () => {
   const [activeTab, setActiveTab] = useState('feedback');
-  const [rating, setRating] = useState(0);
-  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackType, setFeedbackType] = useState('general');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackEmail, setFeedbackEmail] = useState('');
+  const [userFeedbacks, setUserFeedbacks] = useState([]);
+  const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(true);
+  const [feedbacksError, setFeedbacksError] = useState('');
+  const [feedbackTypes, setFeedbackTypes] = useState([]);
+  const [isLoadingTypes, setIsLoadingTypes] = useState(true);
 
-  // Recent reviews from database (admin-published reviews)
-  const [recentReviews, setRecentReviews] = useState([]);
-  const [isLoadingReviews, setIsLoadingReviews] = useState(true);
-  const [reviewsError, setReviewsError] = useState('');
-
-  // Track user interactions with reviews
-  const [userInteractions, setUserInteractions] = useState({});
-
-  // Track user interactions with admin replies
-  const [adminReplyInteractions, setAdminReplyInteractions] = useState({});
-
-  // Load user's interaction state from database when component mounts
-  useEffect(() => {
-    const loadUserInteractions = async () => {
+  // Load feedback form types when component mounts
+    const loadFeedbackTypes = async () => {
       try {
-        const response = await authAPI.getUserInteractions();
-        setUserInteractions(response.interactions || {});
-      } catch (error) {
-        console.error('Error loading user interactions:', error);
-        // Continue with empty interactions if API fails
-      }
-    };
-
-    loadUserInteractions();
-  }, []);
-
-  // Load published reviews from database when component mounts
-  useEffect(() => {
-    const loadPublishedReviews = async () => {
-      try {
-        setIsLoadingReviews(true);
-        setReviewsError('');
+        setIsLoadingTypes(true);
+        const response = await authAPI.getFeedbackFormTypes();
+        const types = response.types || [];
+        setFeedbackTypes(types);
         
-        const response = await authAPI.getPublishedReviews();
-        setRecentReviews(response.reviews);
-        
-      } catch (error) {
-        console.error('Error loading reviews:', error);
-        setReviewsError(error.message || 'Failed to load reviews');
-        
-        // Fallback to empty array if API fails
-        setRecentReviews([]);
-      } finally {
-        setIsLoadingReviews(false);
-      }
-    };
-
-    loadPublishedReviews();
-  }, []);
-
-  // Load user's own reviews from database when component mounts
-  useEffect(() => {
-    const loadMyReviews = async () => {
-      try {
-        setIsLoadingYourReviews(true);
-        setYourReviewsError('');
-        
-        const response = await authAPI.getMyReviews();
-        setYourReviews(response.reviews);
-        
-      } catch (error) {
-        console.error('Error loading user reviews:', error);
-        
-        // Check if it's a database table issue
-        if (error.message && error.message.includes('table') || error.message.includes('relation')) {
-          setYourReviewsError('Reviews system is not set up yet. Please contact administrator.');
-        } else {
-          setYourReviewsError(error.message || 'Failed to load your reviews');
+        // Set default feedback type to first active type
+        if (types.length > 0) {
+          const firstActiveType = types.find(t => t.status === 'active') || types[0];
+        // Only update if current type is not in the list or is inactive
+        const currentTypeExists = types.find(t => t.value === feedbackType && t.status === 'active');
+        if (!currentTypeExists) {
+          setFeedbackType(firstActiveType.value);
         }
-        
-        // Fallback to empty array if API fails
-        setYourReviews([]);
+        }
+      } catch (error) {
+        console.error('Error loading feedback types:', error);
+        // Fallback to default types if API fails
+        const defaultTypes = [
+          { name: 'General Feedback', value: 'general', status: 'active' },
+          { name: 'Support Request', value: 'support', status: 'active' },
+          { name: 'Property Viewing Inquiry', value: 'property_viewing', status: 'active' },
+          { name: 'Price Quote Request', value: 'price_quote', status: 'active' }
+        ];
+        setFeedbackTypes(defaultTypes);
       } finally {
-        setIsLoadingYourReviews(false);
+        setIsLoadingTypes(false);
       }
     };
 
-    loadMyReviews();
+  useEffect(() => {
+    loadFeedbackTypes();
   }, []);
+
+  // Refresh feedback types when window regains focus (e.g., after admin updates types)
+  useEffect(() => {
+    const handleFocus = () => {
+      loadFeedbackTypes();
+    };
+    
+    // Also refresh on visibility change (when tab becomes visible)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadFeedbackTypes();
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []); // Empty dependency array - only set up listeners once
+
+  // Load user's own feedbacks from database when component mounts
+  useEffect(() => {
+    const loadMyFeedbacks = async () => {
+      try {
+        setIsLoadingFeedbacks(true);
+        setFeedbacksError('');
+        
+        const response = await authAPI.getMyFeedbacks();
+        setUserFeedbacks(response.feedbacks || []);
+        
+      } catch (error) {
+        console.error('Error loading user feedbacks:', error);
+        setFeedbacksError(error.message || 'Failed to load your feedbacks');
+        setUserFeedbacks([]);
+      } finally {
+        setIsLoadingFeedbacks(false);
+      }
+    };
+
+    loadMyFeedbacks();
+  }, []);
+
+  // Refresh feedback data when window regains focus (to show new admin responses)
+  useEffect(() => {
+    const handleFocus = () => {
+      const loadMyFeedbacks = async () => {
+      try {
+          const response = await authAPI.getMyFeedbacks();
+          setUserFeedbacks(response.feedbacks || []);
+      } catch (error) {
+          console.error('Error loading feedbacks:', error);
+        }
+      };
+      loadMyFeedbacks();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  const handleSubmitFeedback = async () => {
+    if (!feedbackMessage.trim()) {
+      alert('Please enter your feedback message.');
+      return;
+    }
+    
+    try {
+      // Submit feedback to backend
+      const feedbackData = {
+        inquiry_type: feedbackType, // 'general', 'support', 'property_viewing', 'price_quote'
+        message: feedbackMessage,
+        email: feedbackEmail || undefined
+      };
+      
+      const response = await authAPI.submitFeedback(feedbackData);
+      
+      alert(response.message);
+      
+      // Reset form
+      setFeedbackType('general');
+      setFeedbackMessage('');
+      setFeedbackEmail('');
+      
+      // Reload feedback list to get updated data from backend (including any admin responses)
+      try {
+        const feedbacksResponse = await authAPI.getMyFeedbacks();
+        setUserFeedbacks(feedbacksResponse.feedbacks || []);
+      } catch (error) {
+        console.error('Error reloading feedbacks:', error);
+      }
+      
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      alert('Failed to submit feedback. Please try again.');
+    }
+  };
 
   // Helper function to format time
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'Unknown';
     const now = Date.now();
-    const diff = now - timestamp;
+    const feedbackDate = new Date(timestamp).getTime();
+    const diff = now - feedbackDate;
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
@@ -105,339 +171,37 @@ const Feedback = () => {
     return new Date(timestamp).toLocaleDateString();
   };
 
-  // User's own reviews from database
-  const [yourReviews, setYourReviews] = useState([]);
-  const [isLoadingYourReviews, setIsLoadingYourReviews] = useState(true);
-  const [yourReviewsError, setYourReviewsError] = useState('');
-
-
-
-  const handleRatingClick = (selectedRating) => {
-    setRating(selectedRating);
+  // Get status badge class - use admin_response to determine status
+  const getStatusBadgeClass = (hasAdminResponse) => {
+    return hasAdminResponse ? 'feedback-status-responded' : 'feedback-status-progress';
   };
 
-  const handleSubmitFeedback = async () => {
-    if (rating === 0) {
-      alert('Please select a rating before submitting feedback.');
-      return;
-    }
-    if (feedbackText.trim() === '') {
-      alert('Please enter your feedback before submitting.');
-      return;
-    }
+  const getStatusText = (hasAdminResponse) => {
+    return hasAdminResponse ? 'Responded' : 'In Progress';
+  };
+          
+  // Get feedback type label
+  const getFeedbackTypeLabel = (type) => {
+    // Try to find the label from the loaded feedback types
+    const typeObj = feedbackTypes.find(t => t.value === type);
+    if (typeObj) {
+      return typeObj.name;
+        }
     
-    try {
-      // Submit feedback to backend
-      const feedbackData = {
-        rating: rating,
-        review_text: feedbackText,
-        review_type: 'platform'
-      };
-      
-      const response = await authAPI.submitFeedback(feedbackData);
-      
-      // Create new review object for local display
-      const newReview = {
-        id: response.review_id,
-        time: 'Just now',
-        rating: rating,
-        text: feedbackText,
-        likes: 0,
-        dislikes: 0,
-        hasAdminReply: false
-      };
-      
-      // Add new review to yourReviews
-      setYourReviews(prevReviews => [newReview, ...prevReviews]);
-      
-      alert(response.message);
-      
-      // Reset form
-      setRating(0);
-      setFeedbackText('');
-      
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
-      alert('Failed to submit feedback. Please try again.');
+    // Fallback to hardcoded labels if types not loaded yet
+    switch (type) {
+      case 'general':
+        return 'General Feedback';
+      case 'support':
+        return 'Support Request';
+      case 'property_viewing':
+        return 'Property Viewing Inquiry';
+      case 'price_quote':
+        return 'Price Quote Request';
+      default:
+        return type;
     }
   };
-
-  // Handle like button click for recent reviews
-  const handleLikeClick = async (reviewId) => {
-    try {
-      // Call API to like/unlike review
-      const response = await authAPI.likeReview(reviewId);
-      
-      // Update local state with new counts and interaction
-      setRecentReviews(prevReviews => 
-        prevReviews.map(review => {
-          if (review.id === reviewId) {
-            const currentInteraction = userInteractions[reviewId];
-            
-            // Update interaction state
-            if (currentInteraction === 'like') {
-              // User unliked
-              setUserInteractions(prev => ({ ...prev, [reviewId]: null }));
-            } else {
-              // User liked or switched from dislike
-              setUserInteractions(prev => ({ ...prev, [reviewId]: 'like' }));
-            }
-            
-            // Update counts from API response
-            return { ...review, likes: response.likes, dislikes: response.dislikes };
-          }
-          return review;
-        })
-      );
-      
-      // Update user interactions state
-      if (userInteractions[reviewId] === 'like') {
-        setUserInteractions(prev => ({ ...prev, [reviewId]: null }));
-      } else {
-        setUserInteractions(prev => ({ ...prev, [reviewId]: 'like' }));
-      }
-      
-    } catch (error) {
-      console.error('Error handling like:', error);
-      alert('Failed to update like. Please try again.');
-    }
-  };
-
-  // Handle dislike button click for recent reviews
-  const handleDislikeClick = async (reviewId) => {
-    try {
-      // Call API to dislike/undislike review
-      const response = await authAPI.dislikeReview(reviewId);
-      
-      // Update local state with new counts and interaction
-      setRecentReviews(prevReviews => 
-        prevReviews.map(review => {
-          if (review.id === reviewId) {
-            const currentInteraction = userInteractions[reviewId];
-            
-            // Update interaction state
-            if (currentInteraction === 'dislike') {
-              // User undisliked
-              setUserInteractions(prev => ({ ...prev, [reviewId]: null }));
-            } else {
-              // User disliked or switched from like
-              setUserInteractions(prev => ({ ...prev, [reviewId]: 'dislike' }));
-            }
-            
-            // Update counts from API response
-            return { ...review, likes: response.likes, dislikes: response.dislikes };
-          }
-          return review;
-        })
-      );
-      
-      // Update user interactions state
-      if (userInteractions[reviewId] === 'dislike') {
-        setUserInteractions(prev => ({ ...prev, [reviewId]: null }));
-      } else {
-        setUserInteractions(prev => ({ ...prev, [reviewId]: 'dislike' }));
-      }
-      
-    } catch (error) {
-      console.error('Error handling dislike:', error);
-      alert('Failed to update dislike. Please try again.');
-    }
-  };
-
-  // Handle like button click for your reviews
-  const handleYourReviewLikeClick = async (reviewId) => {
-    try {
-      // Call API to like/unlike review
-      const response = await authAPI.likeReview(reviewId);
-      
-      // Update local state with new counts and interaction
-      setYourReviews(prevReviews => 
-        prevReviews.map(review => {
-          if (review.id === reviewId) {
-            const currentInteraction = userInteractions[reviewId];
-            
-            // Update interaction state
-            if (currentInteraction === 'like') {
-              // User unliked
-              setUserInteractions(prev => ({ ...prev, [reviewId]: null }));
-            } else {
-              // User liked or switched from dislike
-              setUserInteractions(prev => ({ ...prev, [reviewId]: 'like' }));
-            }
-            
-            // Update counts from API response
-            return { ...review, likes: response.likes, dislikes: response.dislikes };
-          }
-          return review;
-        })
-      );
-      
-      // Update user interactions state
-      if (userInteractions[reviewId] === 'like') {
-        setUserInteractions(prev => ({ ...prev, [reviewId]: null }));
-      } else {
-        setUserInteractions(prev => ({ ...prev, [reviewId]: 'like' }));
-      }
-      
-    } catch (error) {
-      console.error('Error handling like:', error);
-      alert('Failed to update like. Please try again.');
-    }
-  };
-
-    // Handle dislike button click for your reviews
-  const handleYourReviewDislikeClick = async (reviewId) => {
-    try {
-      // Call API to dislike/undislike review
-      const response = await authAPI.dislikeReview(reviewId);
-      
-      // Update local state with new counts and interaction
-      setYourReviews(prevReviews => 
-        prevReviews.map(review => {
-          if (review.id === reviewId) {
-            const currentInteraction = userInteractions[reviewId];
-            
-            // Update interaction state
-            if (currentInteraction === 'dislike') {
-              // User undisliked
-              setUserInteractions(prev => ({ ...prev, [reviewId]: null }));
-            } else {
-              // User disliked or switched from like
-              setUserInteractions(prev => ({ ...prev, [reviewId]: 'dislike' }));
-            }
-            
-            // Update counts from API response
-            return { ...review, likes: response.likes, dislikes: response.dislikes };
-          }
-          return review;
-        })
-      );
-      
-      // Update user interactions state
-      if (userInteractions[reviewId] === 'dislike') {
-        setUserInteractions(prev => ({ ...prev, [reviewId]: null }));
-      } else {
-        setUserInteractions(prev => ({ ...prev, [reviewId]: 'dislike' }));
-      }
-      
-    } catch (error) {
-      console.error('Error handling dislike:', error);
-      alert('Failed to update dislike. Please try again.');
-    }
-  };
-
-  // Handle like button click for admin replies
-  const handleAdminReplyLikeClick = (reviewId) => {
-    setYourReviews(prevReviews => 
-      prevReviews.map(review => {
-        if (review.id === reviewId && review.hasAdminReply) {
-          const currentInteraction = adminReplyInteractions[reviewId];
-          
-          // If user already liked this admin reply, remove the like
-          if (currentInteraction === 'like') {
-            setAdminReplyInteractions(prev => ({ ...prev, [reviewId]: null }));
-            return { 
-              ...review, 
-              adminReply: { 
-                ...review.adminReply, 
-                likes: Math.max(0, (review.adminReply.likes || 0) - 1)
-              } 
-            };
-          }
-          
-          // If user already disliked this admin reply, switch to like
-          if (currentInteraction === 'dislike') {
-            setAdminReplyInteractions(prev => ({ ...prev, [reviewId]: 'like' }));
-            return { 
-              ...review, 
-              adminReply: { 
-                ...review.adminReply, 
-                likes: (review.adminReply.likes || 0) + 1,
-                dislikes: Math.max(0, (review.adminReply.dislikes || 0) - 1)
-              } 
-            };
-          }
-          
-          // If user hasn't interacted, add like
-          setAdminReplyInteractions(prev => ({ ...prev, [reviewId]: 'like' }));
-          return { 
-            ...review, 
-            adminReply: { 
-              ...review.adminReply, 
-              likes: (review.adminReply.likes || 0) + 1 
-            } 
-          };
-        }
-        return review;
-      })
-    );
-  };
-
-  // Handle dislike button click for admin replies
-  const handleAdminReplyDislikeClick = (reviewId) => {
-    setYourReviews(prevReviews => 
-      prevReviews.map(review => {
-        if (review.id === reviewId && review.hasAdminReply) {
-          const currentInteraction = adminReplyInteractions[reviewId];
-          
-          // If user already disliked this admin reply, remove the dislike
-          if (currentInteraction === 'dislike') {
-            setAdminReplyInteractions(prev => ({ ...prev, [reviewId]: null }));
-            return { 
-              ...review, 
-              adminReply: { 
-                ...review.adminReply, 
-                dislikes: Math.max(0, (review.adminReply.dislikes || 0) - 1)
-              } 
-            };
-          }
-          
-          // If user already liked this admin reply, switch to dislike
-          if (currentInteraction === 'like') {
-            setAdminReplyInteractions(prev => ({ ...prev, [reviewId]: 'dislike' }));
-            return { 
-              ...review, 
-              adminReply: { 
-                ...review.adminReply, 
-                likes: Math.max(0, (review.adminReply.likes || 0) - 1),
-                dislikes: (review.adminReply.dislikes || 0) + 1
-              } 
-            };
-          }
-          
-          // If user hasn't interacted, add dislike
-          setAdminReplyInteractions(prev => ({ ...prev, [reviewId]: 'dislike' }));
-          return { 
-            ...review, 
-            adminReply: { 
-              ...review.adminReply, 
-              dislikes: (review.adminReply.dislikes || 0) + 1 
-            } 
-          };
-        }
-        return review;
-      })
-    );
-  };
-
-  const renderStars = (rating, interactive = false) => {
-    return (
-      <div className="feedback-stars">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            className={`feedback-star-btn ${star <= rating ? 'filled' : ''} ${interactive ? 'interactive' : ''}`}
-            onClick={interactive ? () => handleRatingClick(star) : undefined}
-            disabled={!interactive}
-          >
-            ★
-          </button>
-        ))}
-      </div>
-    );
-  };
-
-
 
   return (
     <div className="user-dashboard">
@@ -453,22 +217,61 @@ const Feedback = () => {
           {/* Feedback Section */}
           <section className="feedback-section">
             <h1 className="feedback-section-title">Feedback</h1>
-            <h2 className="feedback-subtitle">Rate Your Experience</h2>
-            
-            <div className="feedback-rating-section">
-              {renderStars(rating, true)}
-            </div>
+            <h2 className="feedback-subtitle">Share Your Thoughts or Report Issues</h2>
             
             <div className="feedback-form">
+              <div className="feedback-form-group">
+                <label htmlFor="feedback-type" className="feedback-label">Feedback Type</label>
+                <select
+                  id="feedback-type"
+                  className="feedback-select"
+                  value={feedbackType}
+                  onChange={(e) => setFeedbackType(e.target.value)}
+                  disabled={isLoadingTypes}
+                >
+                  {feedbackTypes
+                    .filter(type => type.status === 'active')
+                    .map(type => (
+                      <option key={type.id || type.value} value={type.value}>
+                        {type.name}
+                      </option>
+                    ))}
+                  {feedbackTypes.length === 0 && !isLoadingTypes && (
+                    <>
+                      <option value="general">General Feedback</option>
+                      <option value="support">Support Request</option>
+                      <option value="property_viewing">Property Viewing Inquiry</option>
+                      <option value="price_quote">Price Quote Request</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              <div className="feedback-form-group">
+                <label htmlFor="feedback-message" className="feedback-label">Describe your feedback</label>
               <textarea
+                  id="feedback-message"
                 className="feedback-textarea"
-                placeholder="Share your thoughts, suggestions, or issues here... (Max. 500 characters)"
-                value={feedbackText}
-                onChange={(e) => setFeedbackText(e.target.value)}
-                maxLength={500}
-                rows={4}
+                  placeholder="Please describe your feedback, issue, or inquiry in detail... (Max. 1000 characters)"
+                  value={feedbackMessage}
+                  onChange={(e) => setFeedbackMessage(e.target.value)}
+                  maxLength={1000}
+                  rows={6}
               />
-              <div className="feedback-char-count">{feedbackText.length}/500</div>
+              </div>
+              <div className="feedback-char-count">{feedbackMessage.length}/1000</div>
+
+              <div className="feedback-form-group">
+                <label htmlFor="feedback-email" className="feedback-label">Email (optional)</label>
+                <input
+                  id="feedback-email"
+                  type="email"
+                  className="feedback-input"
+                  placeholder="your.email@example.com"
+                  value={feedbackEmail}
+                  onChange={(e) => setFeedbackEmail(e.target.value)}
+                />
+              </div>
               
               <button 
                 className="feedback-submit-btn"
@@ -479,171 +282,60 @@ const Feedback = () => {
             </div>
           </section>
 
-          {/* Recent Reviews Section */}
-          <section className="feedback-reviews-section">
-            <h2 className="feedback-section-title">Recent Reviews</h2>
-            
-            {/* Error Message */}
-            {reviewsError && (
-              <div className="feedback-error-message">
-                {reviewsError}
-              </div>
-            )}
-            
-            {/* Loading State */}
-            {isLoadingReviews && (
-              <div className="feedback-loading">
-                <p>Loading reviews...</p>
-              </div>
-            )}
-            
-            {/* Reviews List */}
-            {!isLoadingReviews && !reviewsError && (
-              <div className="feedback-reviews-list">
-                {recentReviews.length > 0 ? (
-                  recentReviews.map((review) => (
-                    <div key={review.id} className="feedback-review-card">
-                      <div className="feedback-review-header">
-                        <img src={review.image} alt={review.name} className="feedback-reviewer-image" />
-                        <div className="feedback-reviewer-info">
-                          <h3 className="feedback-reviewer-name">{review.name}</h3>
-                          <span className="feedback-review-time">{review.time}</span>
-                        </div>
-                      </div>
-                      <div className="feedback-review-rating">
-                        {renderStars(review.rating)}
-                      </div>
-                      <p className="feedback-review-text">{review.text}</p>
-                      
-                      {/* Admin Response Display */}
-                      {review.admin_response && (
-                        <div className="feedback-admin-response">
-                          <div className="feedback-admin-response-header">
-                            <span className="feedback-admin-response-label">Admin Response:</span>
-                          </div>
-                          <div className="feedback-admin-response-content">
-                            <p className="feedback-admin-response-text">"{review.admin_response}"</p>
-                            {review.admin_response_date && (
-                              <span className="feedback-admin-response-date">
-                                {new Date(review.admin_response_date).toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="feedback-review-engagement">
-                        <button 
-                          className={`feedback-engagement-btn ${userInteractions[review.id] === 'like' ? 'active' : ''}`}
-                          onClick={() => handleLikeClick(review.id)}
-                          title={userInteractions[review.id] === 'like' ? 'Remove like' : 'Like this review'}
-                        >
-                          <span className="feedback-engagement-icon">👍</span>
-                          <span className="feedback-engagement-count">{review.likes}</span>
-                        </button>
-                        <button 
-                          className={`feedback-engagement-btn ${userInteractions[review.id] === 'dislike' ? 'active' : ''}`}
-                          onClick={() => handleDislikeClick(review.id)}
-                          title={userInteractions[review.id] === 'dislike' ? 'Remove dislike' : 'Dislike this review'}
-                        >
-                          <span className="feedback-engagement-icon">👎</span>
-                          <span className="feedback-engagement-count">{review.dislikes}</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="feedback-no-reviews">
-                    <p>No reviews available at the moment.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-
-                    {/* Your Reviews Section */}
+          {/* Your Past Feedback Section */}
           <section className="feedback-your-reviews-section">
-            <h2 className="feedback-section-title">Your Reviews</h2>
+            <h2 className="feedback-section-title">Your Past Feedback</h2>
             
-            {/* Error Message */}
-            {yourReviewsError && (
+            {feedbacksError && (
               <div className="feedback-error-message">
-                {yourReviewsError}
+                {feedbacksError}
               </div>
             )}
             
-            {/* Loading State */}
-            {isLoadingYourReviews && (
+            {isLoadingFeedbacks && (
               <div className="feedback-loading">
-                <p>Loading your reviews...</p>
+                <p>Loading your feedback...</p>
               </div>
             )}
             
-            {/* Reviews List */}
-            {!isLoadingYourReviews && !yourReviewsError && (
+            {!isLoadingFeedbacks && !feedbacksError && (
               <div className="feedback-reviews-list">
-                {yourReviews.length > 0 ? (
-                  yourReviews.map((review) => (
-                    <div key={review.id} className="feedback-review-card your-review">
+                {userFeedbacks.length > 0 ? (
+                  userFeedbacks.map((feedback) => (
+                    <div key={feedback.id} className="feedback-review-card">
                       <div className="feedback-review-header">
-                        <div className="feedback-reviewer-image you">You</div>
+                        <div className="feedback-feedback-icon">💬</div>
                         <div className="feedback-reviewer-info">
-                          <h3 className="feedback-reviewer-name">You</h3>
-                          <span className="feedback-review-time">{review.time}</span>
-                          {review.is_verified && (
-                            <span className="feedback-review-status verified">✓ Published</span>
-                          )}
-                          {!review.is_verified && (
-                            <span className="feedback-review-status pending">⏳ Pending Review</span>
-                          )}
+                          <h3 className="feedback-reviewer-name">{getFeedbackTypeLabel(feedback.inquiry_type)}</h3>
+                          <span className="feedback-review-time">{formatTime(feedback.created_at)}</span>
+                          <span className={`feedback-status-badge ${getStatusBadgeClass(!!feedback.admin_response)}`}>
+                            {getStatusText(!!feedback.admin_response)}
+                          </span>
                         </div>
                       </div>
-                      <div className="feedback-review-rating">
-                        {renderStars(review.rating)}
-                      </div>
-                      <p className="feedback-review-text">{review.text}</p>
+                      <p className="feedback-review-text">{feedback.message}</p>
                       
-                      {/* Admin Response Display */}
-                      {review.admin_response && (
+                      {feedback.admin_response && (
                         <div className="feedback-admin-response">
                           <div className="feedback-admin-response-header">
                             <span className="feedback-admin-response-label">Admin Response:</span>
                           </div>
                           <div className="feedback-admin-response-content">
-                            <p className="feedback-admin-response-text">"{review.admin_response}"</p>
-                            {review.admin_response_date && (
+                            <p className="feedback-admin-response-text">"{feedback.admin_response}"</p>
+                            {feedback.admin_response_date && (
                               <span className="feedback-admin-response-date">
-                                {new Date(review.admin_response_date).toLocaleDateString()}
+                                {new Date(feedback.admin_response_date).toLocaleDateString()}
                               </span>
                             )}
                           </div>
                         </div>
                       )}
-                      
-                      <div className="feedback-review-engagement">
-                        <button 
-                          className={`feedback-engagement-btn ${userInteractions[review.id] === 'like' ? 'active' : ''}`}
-                          onClick={() => handleYourReviewLikeClick(review.id)}
-                          title={userInteractions[review.id] === 'like' ? 'Remove like' : 'Like this review'}
-                        >
-                          <span className="feedback-engagement-icon">👍</span>
-                                                     <span className="feedback-engagement-count">{review.likes}</span>
-                        </button>
-                        <button 
-                          className={`feedback-engagement-btn ${userInteractions[review.id] === 'dislike' ? 'active' : ''}`}
-                          onClick={() => handleYourReviewDislikeClick(review.id)}
-                          title={userInteractions[review.id] === 'dislike' ? 'Remove dislike' : 'Dislike this review'}
-                        >
-                          <span className="feedback-engagement-icon">👎</span>
-                          <span className="feedback-engagement-count">{review.dislikes}</span>
-                        </button>
-                      </div>
                     </div>
                   ))
                 ) : (
                   <div className="feedback-no-reviews">
-                    <p>You haven't submitted any reviews yet.</p>
-                    <p>Submit your first review using the form above!</p>
+                    <p>You haven't submitted any feedback yet.</p>
+                    <p>Submit your first feedback using the form above!</p>
                   </div>
                 )}
               </div>
