@@ -101,20 +101,37 @@ class MultiModelPredictor:
             if commercial_path.exists():
                 try:
                     model_data = joblib.load(commercial_path)
-                    # Handle different model storage formats
-                    if isinstance(model_data, dict):
+                    # Handle property-type-specific models (new format)
+                    if isinstance(model_data, dict) and model_data.get('is_property_type_specific'):
+                        # Property-type-specific models: model_data['model'] is a dict of {property_type: model_info}
+                        self.commercial_model = model_data.get('model')  # Dictionary of property-type models
+                        self.commercial_model_data = model_data
+                        property_types = model_data.get('property_types', [])
+                        print(f"✅ Commercial model loaded (property-type-specific): {commercial_path}")
+                        print(f"   Property types: {property_types}")
+                        for prop_type in property_types:
+                            if prop_type in model_data.get('model_info', {}):
+                                info = model_data['model_info'][prop_type]
+                                print(f"      {prop_type}: {info.get('n_features', '?')} features, R²={info.get('performance', {}).get('r2', 0):.4f}")
+                    elif isinstance(model_data, dict):
+                        # Single combined model (old format - less accurate)
                         self.commercial_model = model_data.get('model') or model_data.get('regressor') or model_data.get('pipeline')
                         self.commercial_model_data = model_data
+                        print(f"✅ Commercial model loaded (single combined model): {commercial_path}")
+                        print(f"   ⚠️ WARNING: Using less accurate combined model. Consider retraining with property-type-specific models.")
                     elif hasattr(model_data, 'predict'):
                         # Direct model object
                         self.commercial_model = model_data
                         self.commercial_model_data = {'model': model_data}
+                        print(f"✅ Commercial model loaded: {commercial_path}")
                     else:
                         self.commercial_model = model_data
                         self.commercial_model_data = {'model': model_data}
                     print(f"✅ Commercial model loaded: {commercial_path}")
                 except Exception as e:
                     print(f"⚠️ Error loading commercial model: {e}")
+                    import traceback
+                    traceback.print_exc()
                     self.commercial_model = None
             else:
                 print(f"❌ Commercial model not found: {commercial_path}")
@@ -195,11 +212,64 @@ class MultiModelPredictor:
         category = self.get_property_type_category(property_type)
         
         if category == 'commercial':
-            return self.commercial_model, self.commercial_model_data
+            # Check if using property-type-specific models
+            if (self.commercial_model_data and 
+                self.commercial_model_data.get('is_property_type_specific') and
+                isinstance(self.commercial_model, dict)):
+                # Property-type-specific models: select the right one
+                # Normalize property type name to match training data
+                prop_type_normalized = self._normalize_property_type_for_commercial(property_type)
+                
+                if prop_type_normalized in self.commercial_model:
+                    model_info = self.commercial_model[prop_type_normalized]
+                    return model_info['model'], {
+                        'model': model_info['model'],
+                        'property_type': prop_type_normalized,
+                        'feature_names_after_encoding': model_info['feature_names_after_encoding'],
+                        'feature_columns': model_info['feature_columns'],
+                        'categorical_columns': model_info['categorical_columns'],
+                        'imputer': model_info['imputer'],
+                        'is_property_type_specific': True,
+                        'model_info': self.commercial_model_data.get('model_info', {}).get(prop_type_normalized, {})
+                    }
+                else:
+                    # Fallback: use first available model or Office (most common)
+                    available_types = list(self.commercial_model.keys())
+                    fallback_type = 'Office' if 'Office' in available_types else available_types[0]
+                    print(f"⚠️ Property type '{prop_type_normalized}' not found, using '{fallback_type}' model")
+                    model_info = self.commercial_model[fallback_type]
+                    return model_info['model'], {
+                        'model': model_info['model'],
+                        'property_type': fallback_type,
+                        'feature_names_after_encoding': model_info['feature_names_after_encoding'],
+                        'feature_columns': model_info['feature_columns'],
+                        'categorical_columns': model_info['categorical_columns'],
+                        'imputer': model_info['imputer'],
+                        'is_property_type_specific': True,
+                        'model_info': self.commercial_model_data.get('model_info', {}).get(fallback_type, {})
+                    }
+            else:
+                # Single combined model (old format)
+                return self.commercial_model, self.commercial_model_data
         elif category == 'industrial':
             return self.industrial_model, self.industrial_model_data
         else:
             return self.commercial_model, self.commercial_model_data  # Default
+    
+    def _normalize_property_type_for_commercial(self, property_type):
+        """Normalize property type name to match training data format"""
+        prop_type_lower = property_type.lower().strip()
+        
+        # Map variations to training data format
+        if 'shop' in prop_type_lower and 'house' in prop_type_lower:
+            return 'Shop House'
+        elif 'retail' in prop_type_lower:
+            return 'Retail'
+        elif 'office' in prop_type_lower:
+            return 'Office'
+        else:
+            # Default to Office (most common)
+            return 'Office'
     
     def calculate_distance(self, lat1, lng1, lat2, lng2):
         """Calculate distance between two points in kilometers"""
@@ -281,13 +351,17 @@ class MultiModelPredictor:
         }
         general_location = district_to_location.get(postal_district, 'Raffles Place')
         
-        # Region classification
-        if postal_district <= 20:
-            region_classification = 'CCR_Central_Core'
-        elif postal_district <= 30:
-            region_classification = 'RCR_Rest_Central'
+        # Region classification (matches notebook format exactly: 'Central Core', 'Rest Central', 'City Fringe', 'Outside Central')
+        if postal_district <= 9:
+            region_classification = 'Central Core'
+        elif postal_district <= 16:
+            region_classification = 'Rest Central'
+        elif postal_district <= 21:
+            region_classification = 'City Fringe'
+        elif postal_district <= 28:
+            region_classification = 'Outside Central'
         else:
-            region_classification = 'OCR_Outside_Central'
+            region_classification = 'Unknown'
         
         # Parse floor level (based on notebook logic)
         floor_low = 0
@@ -379,49 +453,200 @@ class MultiModelPredictor:
         if model_data:
             model_obj = model_data.get('model')
             
+            # Check if using property-type-specific models
+            if model_data.get('is_property_type_specific'):
+                # Property-type-specific model: use exact feature preparation from training
+                feature_columns = model_data.get('feature_columns', [])
+                categorical_columns = model_data.get('categorical_columns', [])
+                expected_features = model_data.get('feature_names_after_encoding', [])
+                imputer = model_data.get('imputer')
+                
+                # Step 1: Add all features that might be in training data
+                # Add missing features with sensible defaults based on feature names
+                for col in feature_columns:
+                    if col not in feature_df.columns:
+                        # Try to infer value or use default based on feature name
+                        if 'Project Name' in col:
+                            feature_df[col] = 'N.A.'
+                        elif 'Planning Area' in col:
+                            feature_df[col] = general_location
+                        elif 'Region' in col:
+                            feature_df[col] = region_classification
+                        elif 'Area (SQFT)' in col:
+                            feature_df[col] = area_sqm * 10.764  # Convert sqm to sqft
+                        elif 'sale_date' in col.lower() or 'sale_year' in col.lower() or 'sale_month' in col.lower():
+                            # Use current date if sale date features exist
+                            import datetime
+                            now = datetime.datetime.now()
+                            if 'sale_year' in col.lower():
+                                feature_df[col] = now.year
+                            elif 'sale_month' in col.lower():
+                                feature_df[col] = now.month
+                            elif 'sale_quarter' in col.lower():
+                                feature_df[col] = (now.month - 1) // 3 + 1
+                            elif 'days_since' in col.lower():
+                                feature_df[col] = 0  # Default to 0
+                            else:
+                                feature_df[col] = 0
+                        elif 'is_' in col.lower() or col.lower().startswith('type_'):
+                            # Binary/indicator features
+                            feature_df[col] = 0
+                        elif 'Floor_Category' in col:
+                            # Floor category (already handled by Floor_Low, etc.)
+                            feature_df[col] = 'floors_01_05'  # Default
+                        else:
+                            feature_df[col] = 0  # Default for numeric
+                
+                # Select only the feature_columns used during training
+                feature_df_filtered = feature_df[[col for col in feature_columns if col in feature_df.columns]].copy()
+                
+                # Step 2: One-hot encode categorical features EXACTLY as in training (pd.get_dummies with drop_first=True)
+                if categorical_columns:
+                    # Use pd.get_dummies with drop_first=True (same as training)
+                    feature_df_encoded = pd.get_dummies(
+                        feature_df_filtered, 
+                        columns=[col for col in categorical_columns if col in feature_df_filtered.columns],
+                        drop_first=True
+                    )
+                else:
+                    feature_df_encoded = feature_df_filtered.copy()
+                
+                # Step 3: Apply imputer (same as training)
+                if imputer:
+                    try:
+                        feature_df_imputed = pd.DataFrame(
+                            imputer.transform(feature_df_encoded),
+                            columns=feature_df_encoded.columns,
+                            index=feature_df_encoded.index
+                        )
+                    except Exception as e:
+                        print(f"⚠️ Imputer transform failed: {e}, filling NaN with 0")
+                        feature_df_imputed = feature_df_encoded.fillna(0)
+                else:
+                    feature_df_imputed = feature_df_encoded.fillna(0)
+                
+                # Step 4: Ensure all expected features are present (add missing with 0)
+                for feat in expected_features:
+                    if feat not in feature_df_imputed.columns:
+                        feature_df_imputed[feat] = 0
+                
+                # Step 5: Reorder to match exact training feature order
+                if expected_features:
+                    feature_df = feature_df_imputed[expected_features]
+                else:
+                    feature_df = feature_df_imputed
+                
+                print(f"   Property-type-specific features: {len(feature_columns)} base → {len(expected_features)} after encoding")
+            
             # Check if model is a Pipeline (sklearn pipeline includes preprocessing)
-            if isinstance(model_obj, Pipeline):
+            elif isinstance(model_obj, Pipeline):
                 # Pipeline handles preprocessing automatically, just return base features
                 return feature_df
             
-            # Check if model_data has feature names or preprocessor info
-            if 'feature_names' in model_data:
+            # Check if model_data has feature names or preprocessor info (old format - single combined model)
+            elif 'feature_names' in model_data:
                 expected_features = model_data['feature_names']
                 
                 # One-hot encode categorical features using pd.get_dummies (same as training)
                 categorical_cols = ['Property Type', 'Type of Area', 'Tenure', 
-                                   'General_Location', 'Region_Classification']
+                                   'General_Location', 'Region_Classification',
+                                   'Project Name', 'Planning Area', 'Region', 'Street Name']
                 
+                # Step 1: Add missing base features that might be in training data
+                for col in categorical_cols:
+                    if col not in feature_df.columns:
+                        if 'Project Name' in col:
+                            feature_df[col] = 'N.A.'
+                        elif 'Planning Area' in col:
+                            feature_df[col] = general_location
+                        elif 'Region' in col:
+                            feature_df[col] = region_classification
+                        elif 'Street Name' in col:
+                            # Extract street name from address
+                            import re
+                            street_match = re.search(r'([A-Z\s]+(?:STREET|ROAD|AVENUE|LANE|WAY|DRIVE|CRESCENT|PLACE|QUAY|WALK|CLOSE|PARK|GREEN|VIEW|GARDEN|CIRCUIT|RISE|HILL|GATE|LOOP|TERRACE|LINK|BOULEVARD|SQUARE|PROMENADE|CONCOURSE|CIRCLE|BEND|PASSAGE|GROVE|CORNER|PARKWAY|VILLAS|ESTATE|GARDENS|HEIGHTS|CREST|VIEWS|VALE|RIDGE|GREEN|PARKWAY|GARDENS|ESTATE|HEIGHTS|CREST|VIEWS|VALE|RIDGE))', address, re.IGNORECASE)
+                            feature_df[col] = street_match.group(1).strip() if street_match else 'UNKNOWN STREET'
+                
+                # Add missing numeric features that might be in training data
+                numeric_features_to_add = ['Area (SQFT)', 'sale_year', 'sale_month', 'sale_quarter', 
+                                         'sale_dayofweek', 'days_since_first_sale', 'sale_date_missing',
+                                         'Floor_Category_ML', 'Urban_Classification']
+                for col in numeric_features_to_add:
+                    if col not in feature_df.columns:
+                        if 'Area (SQFT)' in col:
+                            feature_df[col] = area_sqm * 10.764
+                        elif 'sale_' in col.lower():
+                            import datetime
+                            now = datetime.datetime.now()
+                            if 'sale_year' in col.lower():
+                                feature_df[col] = now.year
+                            elif 'sale_month' in col.lower():
+                                feature_df[col] = now.month
+                            elif 'sale_quarter' in col.lower():
+                                feature_df[col] = (now.month - 1) // 3 + 1
+                            elif 'sale_dayofweek' in col.lower():
+                                feature_df[col] = now.weekday()
+                            elif 'days_since' in col.lower():
+                                feature_df[col] = 0
+                            elif 'sale_date_missing' in col.lower():
+                                feature_df[col] = 0
+                        elif 'Floor_Category' in col:
+                            feature_df[col] = 'floors_01_05'  # Default
+                        elif 'Urban_Classification' in col:
+                            # Infer from CBD distance
+                            if cbd_distance <= 5:
+                                feature_df[col] = 'CBD'
+                            elif cbd_distance <= 10:
+                                feature_df[col] = 'Urban'
+                            elif cbd_distance <= 20:
+                                feature_df[col] = 'Suburban'
+                            else:
+                                feature_df[col] = 'Rural'
+                
+                # Step 2: One-hot encode categorical features using pd.get_dummies (same as training)
                 # Create a temporary dataframe with all numeric and categorical columns
                 temp_df = feature_df.copy()
                 
                 # One-hot encode categorical columns (same method as training: pd.get_dummies with drop_first=True)
-                # But we need to match the exact column names from training
-                # So we'll manually create one-hot columns based on expected_features
+                categorical_cols_present = [col for col in categorical_cols if col in temp_df.columns]
+                if categorical_cols_present:
+                    temp_df_encoded = pd.get_dummies(
+                        temp_df, 
+                        columns=categorical_cols_present,
+                        drop_first=True
+                    )
+                else:
+                    temp_df_encoded = temp_df.copy()
+                
+                # Step 3: Match expected features (one-hot encoded columns)
                 for feat_name in expected_features:
-                    if feat_name not in temp_df.columns:
-                        # Check if it's a one-hot encoded column
+                    if feat_name not in temp_df_encoded.columns:
+                        # Check if it's a one-hot encoded column that wasn't created
                         matched = False
                         for col in categorical_cols:
                             if feat_name.startswith(f'{col}_'):
-                                # This is a one-hot column
-                                value = temp_df[col].iloc[0]
-                                category_value = feat_name.replace(f'{col}_', '')
-                                # Set to 1 if it matches our value, 0 otherwise
-                                temp_df[feat_name] = 1 if str(category_value) == str(value) else 0
+                                # This is a one-hot column - check if base column exists
+                                if col in temp_df.columns:
+                                    # Try to create it using pd.get_dummies again
+                                    value = str(temp_df[col].iloc[0])
+                                    category_value = feat_name.replace(f'{col}_', '')
+                                    # Set to 1 if it matches our value, 0 otherwise
+                                    temp_df_encoded[feat_name] = 1 if str(category_value) == str(value) else 0
+                                else:
+                                    temp_df_encoded[feat_name] = 0
                                 matched = True
                                 break
                         
                         if not matched:
                             # Not a one-hot column, might be numeric or other feature
-                            temp_df[feat_name] = 0
+                            temp_df_encoded[feat_name] = 0
                 
-                # Reorder to match expected feature order
+                # Step 4: Reorder to match expected feature order
                 for feat in expected_features:
-                    if feat not in temp_df.columns:
-                        temp_df[feat] = 0
+                    if feat not in temp_df_encoded.columns:
+                        temp_df_encoded[feat] = 0
                 
-                feature_df = temp_df[expected_features]
+                feature_df = temp_df_encoded[expected_features]
             
             elif 'preprocessor' in model_data:
                 try:
@@ -542,26 +767,25 @@ class MultiModelPredictor:
                         print(f"     ❓ Unusual value - checking PSF interpretation: {psf_if_raw_is_total:.2f} PSF")
             
             # Model prediction interpretation
-            # DISCOVERY: Commercial model actually predicts PSM (Price per Square Meter), not total price!
-            # Evidence from raw output: $115,743.82 
-            # - If PSM: $115,743.82 × 114.46 sqm = $13.25M total → $10,752 PSF ✅ (reasonable for prime retail)
-            # - If Total: $115,743.82 → $93.95 PSF ❌ (way too low)
-            # - Industrial model still predicts total price (confirmed from previous testing)
+            # NOTE: Commercial notebook trains on 'Unit Price ($ PSF)' - so model predicts PSF directly!
+            # The notebook Cell 34 shows: target_column = 'Unit Price ($ PSF)'
+            # So the model output is already in PSF (Price per Square Foot)
             
             prediction_value = float(prediction)
             category = self.get_property_type_category(property_type)
             
-            # Commercial model: predicts PSM, need to multiply by area
-            # Industrial model: predicts total price directly
+            # Commercial model: predicts PSF directly (as per notebook training target)
+            # Industrial model: may predict total price or PSF depending on training
             if category == 'commercial':
-                # Commercial model predicts PSM (despite workbook saying "Transacted Price ($)")
-                # Multiply by area in sqm to get total price
-                total_price = prediction_value * area_sqm
-                psf_calc = total_price / (area_sqm * 10.764) if area_sqm > 0 else 0
+                # Commercial model predicts PSF directly (target was 'Unit Price ($ PSF)')
+                # Calculate total price from PSF
+                area_sqft = area_sqm * 10.764  # 1 sqm = 10.764 sqft
+                psf_calc = prediction_value  # Model already predicts PSF
+                total_price = psf_calc * area_sqft
                 
-                print(f"\n🔍 Commercial Model: PSM Interpretation")
-                print(f"   Raw output: ${prediction_value:,.2f} PSM")
-                print(f"   Area: {area_sqm:.2f} sqm")
+                print(f"\n🔍 Commercial Model: PSF Interpretation (matches notebook)")
+                print(f"   Raw output: ${prediction_value:,.2f} PSF (direct prediction)")
+                print(f"   Area: {area_sqm:.2f} sqm ({area_sqft:.2f} sqft)")
                 print(f"   Total Price: ${total_price:,.2f}")
                 print(f"   PSF: ${psf_calc:,.2f}")
             else:
@@ -713,18 +937,18 @@ class MultiModelPredictor:
             
             # Rental model prediction interpretation
             # Based on workbook analysis:
-            # - Rental model: trained on "Median_PSM" = Price per Square Meter per month
-            # So: prediction = PSM/month (price per square meter per month)
+            # - Rental notebook converts PSM to PSF: df[col] = (df[col] / 10.7639).round(2)
+            # - Then trains on "Median_PSF" = Price per Square Foot per month
+            # So: prediction = PSF/month (price per square foot per month)
             prediction_value = float(prediction)
             
-            # Model predicts PSM/month directly, so multiply by area in sqm to get total monthly rental
-            monthly_rental = prediction_value * area_sqm
-            
-            # Convert area from sqm to sqft for PSF calculation and logging
+            # Model predicts PSF/month directly (after notebook conversion from PSM to PSF)
+            # Convert area from sqm to sqft for calculation
             area_sqft = area_sqm * 10.764  # 1 sqm = 10.764 sqft
-            psf_calc = monthly_rental / area_sqft if area_sqft > 0 else 0
+            psf_per_month = prediction_value  # Model already predicts PSF/month
+            monthly_rental = psf_per_month * area_sqft
             
-            print(f"🎯 Rental Price Prediction: PSM/month=${prediction_value:,.2f}, Monthly Total=${monthly_rental:,.2f}/month (Area: {area_sqm:.2f} sqm = {area_sqft:.2f} sqft, PSF/month=${psf_calc:,.2f})")
+            print(f"🎯 Rental Price Prediction: PSF/month=${psf_per_month:,.2f}, Monthly Total=${monthly_rental:,.2f}/month (Area: {area_sqm:.2f} sqm = {area_sqft:.2f} sqft)")
             
             # Validate reasonable ranges
             # Typical monthly rental for 1000 sqft office: $2,000-$10,000
@@ -736,19 +960,21 @@ class MultiModelPredictor:
             if monthly_rental < 0:
                 print(f"⚠️ Warning: Model predicted negative rental ${monthly_rental:,.2f}, using absolute value")
                 monthly_rental = abs(monthly_rental)
-                psf_calc = monthly_rental / area_sqft if area_sqft > 0 else 0
+                psf_per_month = monthly_rental / area_sqft if area_sqft > 0 else 0
             
             # Validate PSF/month range (sanity check)
-            if psf_calc < min_psf_per_month:
+            if psf_per_month < min_psf_per_month:
                 # If PSF/month is too low, adjust to minimum
                 adjusted_monthly = area_sqft * min_psf_per_month
-                print(f"⚠️ Warning: Calculated PSF/month ${psf_calc:,.2f} is below minimum ${min_psf_per_month}, adjusting to ${adjusted_monthly:,.2f}/month")
+                print(f"⚠️ Warning: Predicted PSF/month ${psf_per_month:,.2f} is below minimum ${min_psf_per_month}, adjusting to ${adjusted_monthly:,.2f}/month")
                 monthly_rental = adjusted_monthly
-            elif psf_calc > max_psf_per_month:
+                psf_per_month = min_psf_per_month
+            elif psf_per_month > max_psf_per_month:
                 # If PSF/month is too high, cap at maximum
                 adjusted_monthly = area_sqft * max_psf_per_month
-                print(f"⚠️ Warning: Calculated PSF/month ${psf_calc:,.2f} is above maximum ${max_psf_per_month}, capping to ${adjusted_monthly:,.2f}/month")
+                print(f"⚠️ Warning: Predicted PSF/month ${psf_per_month:,.2f} is above maximum ${max_psf_per_month}, capping to ${adjusted_monthly:,.2f}/month")
                 monthly_rental = adjusted_monthly
+                psf_per_month = max_psf_per_month
             
             return monthly_rental
             
