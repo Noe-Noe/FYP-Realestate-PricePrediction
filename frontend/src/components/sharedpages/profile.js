@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApi } from '../../context/ApiContext';
 import { authAPI } from '../../services/api';
 import { BACKEND_ORIGIN } from '../../services/api';
@@ -10,6 +10,7 @@ import './profile.css';
 
 const Profile = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { getUserName, logout } = useApi();
   const [activeTab, setActiveTab] = useState('profile');
   
@@ -25,8 +26,20 @@ const Profile = () => {
     ceaNumber: '',
     agentCompany: '',
     companyPhoneNumber: '',
-    companyEmail: ''
+    companyEmail: '',
+    specializations: [] // Array of selected property type specializations
   });
+
+  // Property types for specialization (same as price prediction)
+  const propertyTypes = [
+    'Office',
+    'Retail',
+    'Shop House',
+    'Single-user Factory',
+    'Multiple-user Factory',
+    'Warehouse',
+    'Business Parks'
+  ];
   
   // License picture state
   const [licensePicture, setLicensePicture] = useState(null);
@@ -49,7 +62,6 @@ const Profile = () => {
   const [successMessage, setSuccessMessage] = useState('');
   
   // Subscription upgrade states
-  const [referralCode, setReferralCode] = useState('');
   const [selectedPlan, setSelectedPlan] = useState('monthly');
   const [isUpgrading, setIsUpgrading] = useState(false);
   
@@ -118,7 +130,8 @@ const Profile = () => {
                 ceaNumber: agentProfileResponse.cea_number || '',
                 agentCompany: agentProfileResponse.company_name || '',
                 companyPhoneNumber: agentProfileResponse.company_phone || '',
-                companyEmail: agentProfileResponse.company_email || ''
+                companyEmail: agentProfileResponse.company_email || '',
+                specializations: agentProfileResponse.specializations || []
               });
               
               // Set license picture URL if it exists
@@ -178,6 +191,52 @@ const Profile = () => {
     loadUserProfile();
   }, []);
 
+  // Check if subscription or checkout modal should be shown from navigation state
+  useEffect(() => {
+    console.log('🔍 Profile useEffect - location.state:', location.state);
+    
+    // Check sessionStorage first (backup for navigation state)
+    const showCheckoutFromStorage = sessionStorage.getItem('showCheckoutModal');
+    console.log('🔍 Profile useEffect - sessionStorage showCheckoutModal:', showCheckoutFromStorage);
+    
+    const shouldShowCheckout = location.state?.showCheckoutModal || showCheckoutFromStorage === 'true';
+    const shouldShowSubscription = location.state?.showSubscriptionModal;
+    
+    if (shouldShowCheckout) {
+      console.log('✅ Opening checkout modal from navigation state');
+      setActiveTab('profile');
+      setShowSubscriptionModal(false);
+      // Use setTimeout to ensure state update happens
+      setTimeout(() => {
+        setShowCheckoutModal(true);
+        console.log('✅ showCheckoutModal set to true');
+      }, 0);
+      // Default to monthly plan if not set
+      setSelectedPlan('monthly');
+      // Clear sessionStorage
+      sessionStorage.removeItem('showCheckoutModal');
+      
+      // Clear the state after a delay to prevent showing modal on subsequent visits
+      setTimeout(() => {
+        window.history.replaceState({}, document.title);
+      }, 500);
+    } else if (shouldShowSubscription) {
+      console.log('Opening subscription modal from navigation state');
+      setActiveTab('profile');
+      setShowSubscriptionModal(true);
+      // Clear the state after a delay to prevent showing modal on subsequent visits
+      setTimeout(() => {
+        window.history.replaceState({}, document.title);
+      }, 500);
+    }
+    
+  }, [location.state, location.pathname]);
+
+  // Debug: Log when showCheckoutModal changes
+  useEffect(() => {
+    console.log('🔵 showCheckoutModal state changed to:', showCheckoutModal);
+  }, [showCheckoutModal]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -196,11 +255,6 @@ const Profile = () => {
     }));
     setApiError('');
     setSuccessMessage('');
-  };
-  
-  const handleReferralCodeChange = (e) => {
-    setReferralCode(e.target.value);
-    setApiError('');
   };
   
   const handlePlanSelection = (e) => {
@@ -226,8 +280,8 @@ const Profile = () => {
       setApiError('New password must be different from your current password!');
       return;
     }
-    if (passwordData.newPassword.length < 6) {
-      setApiError('New password must be at least 6 characters long!');
+    if (passwordData.newPassword.length < 8) {
+      setApiError('New password must be at least 8 characters long!');
       return;
     }
 
@@ -274,7 +328,8 @@ const Profile = () => {
           cea_number: agentFormData.ceaNumber,
           company_name: agentFormData.agentCompany,
           company_phone: agentFormData.companyPhoneNumber,
-          company_email: agentFormData.companyEmail
+          company_email: agentFormData.companyEmail,
+          specializations: agentFormData.specializations
         };
       }
       
@@ -292,11 +347,26 @@ const Profile = () => {
       
       // Update agent form data if response includes agent info
       if (response.agent_profile) {
+        // Handle specializations - ensure it's an array
+        let specializations = [];
+        if (response.agent_profile.specializations) {
+          if (Array.isArray(response.agent_profile.specializations)) {
+            specializations = response.agent_profile.specializations;
+          } else if (typeof response.agent_profile.specializations === 'string') {
+            try {
+              specializations = JSON.parse(response.agent_profile.specializations);
+            } catch (e) {
+              specializations = [];
+            }
+          }
+        }
+        
         setAgentFormData({
           ceaNumber: response.agent_profile.cea_number || '',
           agentCompany: response.agent_profile.company_name || '',
           companyPhoneNumber: response.agent_profile.company_phone || '',
-          companyEmail: response.agent_profile.company_email || ''
+          companyEmail: response.agent_profile.company_email || '',
+          specializations: specializations
         });
         
         // Update license picture URL if provided
@@ -519,13 +589,12 @@ const Profile = () => {
       
       // Prepare upgrade data
       const upgradeData = {
-        plan: selectedPlan,
-        referralCode: referralCode.trim() || null
+        plan: selectedPlan
       };
       
       console.log('Upgrading with data:', upgradeData);
       
-      // Call backend API to upgrade with plan and referral code
+      // Call backend API to upgrade with plan
       const response = await authAPI.upgradeToPremium(upgradeData);
       
       // Update local state
@@ -544,7 +613,6 @@ const Profile = () => {
       setShowCheckoutModal(false);
       
       // Reset form
-      setReferralCode('');
       setSelectedPlan('monthly');
       setPaymentData({
         cardNumber: '',
@@ -553,7 +621,7 @@ const Profile = () => {
         cardName: ''
       });
       
-      // Redirect to dashboard after a short delay to show success message
+      // Redirect to premium dashboard after a short delay to show success message
       setTimeout(() => {
         navigate('/dashboard');
       }, 2000);
@@ -585,7 +653,18 @@ const Profile = () => {
 
   const handleBackToSubscription = () => {
     setShowCheckoutModal(false);
+<<<<<<< HEAD
     setShowSubscriptionModal(true);
+=======
+    // Only show subscription modal if user came from subscription modal
+    // If they came directly to checkout (from price prediction), go back to price prediction page
+    if (location.state?.showCheckoutModal) {
+      // User came directly to checkout from price prediction, navigate back
+      navigate('/dashboard/priceprediction');
+    } else {
+    setShowSubscriptionModal(true);
+    }
+>>>>>>> Mandy
   };
 
   const getPlanPrice = () => {
@@ -636,7 +715,7 @@ const Profile = () => {
 
   const handleDeactivateAccount = async () => {
     const confirmed = window.confirm(
-      '⚠️ WARNING: This action will deactivate your account. You will not be able to log in with this account. To reactivate, you will need to sign up again with a new account.\n\nAre you sure you want to proceed?'
+      '⚠️ WARNING: This action will deactivate your account. You will not be able to log in with this account.\n\nAre you sure you want to proceed?'
     );
     
     if (confirmed) {
@@ -648,7 +727,7 @@ const Profile = () => {
         await authAPI.deactivateOwnAccount();
         
         // Show deactivation confirmation
-        alert('Your account has been deactivated. You will be logged out. You can sign up again with the same email address to create a new account.');
+        alert('Your account has been deactivated. You will be logged out.');
         
         // Logout and clear user data, redirect to landing page
         logout('/');
@@ -822,6 +901,38 @@ const Profile = () => {
                   placeholder="Enter your company email address"
                   disabled={isLoading}
                 />
+              </div>
+
+              <div className="profile-form-group">
+                <label htmlFor="specializations">Specializations (Property Types)</label>
+                <div className="profile-specializations-container">
+                  {propertyTypes.map(propertyType => (
+                    <label key={propertyType} className="profile-specialization-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={agentFormData.specializations.includes(propertyType)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAgentFormData(prev => ({
+                              ...prev,
+                              specializations: [...prev.specializations, propertyType]
+                            }));
+                          } else {
+                            setAgentFormData(prev => ({
+                              ...prev,
+                              specializations: prev.specializations.filter(s => s !== propertyType)
+                            }));
+                          }
+                        }}
+                        disabled={isLoading}
+                      />
+                      <span>{propertyType}</span>
+                    </label>
+                  ))}
+                </div>
+                <small className="profile-form-help-text">
+                  Select one or more property types you specialize in
+                </small>
               </div>
             </section>
           )}
@@ -1081,19 +1192,6 @@ const Profile = () => {
                   <h4>Upgrade to Premium</h4>
                   <p>Get access to advanced search filters, detailed reports, and personalized alerts.</p>
                   
-                  {/* Referral Code Input */}
-                  <div className="profile-referral-section">
-                    <label htmlFor="referralCode">Referral Code (Optional):</label>
-                    <input
-                      type="text"
-                      id="referralCode"
-                      value={referralCode}
-                      onChange={handleReferralCodeChange}
-                      placeholder="Enter referral code for discount"
-                      className="profile-referral-input"
-                    />
-                  </div>
-                  
                   {/* Payment Options */}
                   <div className="profile-payment-options">
                     <h5>Choose Your Plan:</h5>
@@ -1145,7 +1243,15 @@ const Profile = () => {
 
       {/* Payment Checkout Modal */}
       {showCheckoutModal && (
+<<<<<<< HEAD
         <div className="profile-modal-overlay checkout-modal-overlay">
+=======
+        <div className="profile-modal-overlay checkout-modal-overlay" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowCheckoutModal(false);
+          }
+        }}>
+>>>>>>> Mandy
           <div className="checkout-modal-container">
             {/* Left Panel - Payment Form */}
             <div className="checkout-form-panel">

@@ -51,7 +51,11 @@
   margin: 0 auto;
   padding: 2rem 1rem 2rem;
   display: grid;
+<<<<<<< HEAD
   grid-template-columns: repeat(3, 1fr);
+=======
+  grid-template-columns: repeat(4, 1fr);
+>>>>>>> Mandy
   gap: 2rem;
 }
 
@@ -73,6 +77,11 @@
   flex-direction: column;
   transition: all 0.3s ease;
   height: 500px;
+<<<<<<< HEAD
+=======
+  min-height: 500px;
+  max-height: 500px;
+>>>>>>> Mandy
   border: 1px solid #e5e7eb;
 }
 
@@ -82,7 +91,14 @@
 }
 
 .how-card-image {
+<<<<<<< HEAD
   height: 280px;
+=======
+  width: 100%;
+  height: 160px;
+  min-height: 160px;
+  max-height: 160px;
+>>>>>>> Mandy
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -90,6 +106,11 @@
   position: relative;
   overflow: hidden;
   background-color: #f3f4f6;
+<<<<<<< HEAD
+=======
+  flex-shrink: 0;
+  display: block;
+>>>>>>> Mandy
 }
 
 .how-card-image::after {
@@ -278,10 +299,20 @@
   
   .how-card {
     height: 480px;
+<<<<<<< HEAD
+=======
+    min-height: 480px;
+    max-height: 480px;
+>>>>>>> Mandy
   }
   
   .how-card-image {
     height: 250px;
+<<<<<<< HEAD
+=======
+    min-height: 250px;
+    max-height: 250px;
+>>>>>>> Mandy
   }
 }
 
@@ -294,6 +325,11 @@
   
   .how-card {
     height: 500px;
+<<<<<<< HEAD
+=======
+    min-height: 500px;
+    max-height: 500px;
+>>>>>>> Mandy
   }
   
   .details-card {

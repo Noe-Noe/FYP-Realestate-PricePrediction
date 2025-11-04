@@ -21,6 +21,7 @@ const SignUp = () => {
     workNumber: '',
     companyEmail: '',
     ceaLicense: null,
+    specializations: [], // Array of selected property type specializations
     yearlyBilling: false // Added for pricing toggle
   });
   const [errors, setErrors] = useState({});
@@ -326,6 +327,9 @@ const SignUp = () => {
           if (!formData.ceaLicense) {
             newErrors.ceaLicense = 'CEA license upload is required';
           }
+          if (!formData.specializations || formData.specializations.length === 0) {
+            newErrors.specializations = 'Please select at least one specialization';
+          }
         }
         break;
     }
@@ -369,12 +373,6 @@ const SignUp = () => {
           // Agent users: go to agent details step
           setCurrentStep(6);
           setErrors({});
-          return;
-        } else if (formData.userType === 'admin') {
-          // Admin users: submit registration data first, then navigate to dashboard
-          console.log('Admin user signup - submitting registration data');
-          // Call handleRegistration to register the user
-          handleRegistration();
           return;
         }
       }
@@ -498,11 +496,34 @@ const SignUp = () => {
           // Now navigate based on user type
           if (formData.userType === 'agent') {
             console.log('Agent user registration complete, navigating to agent dashboard');
+            
+            // Update agent profile with signup details
+            try {
+              // Upload license if provided
+              if (formData.ceaLicense) {
+                const licenseFormData = new FormData();
+                licenseFormData.append('license_picture', formData.ceaLicense);
+                await authAPI.uploadLicensePicture(licenseFormData);
+              }
+              
+              // Update agent profile with other details
+              const profileData = {
+                agent_info: {
+                  cea_number: formData.ceaNumber,
+                  company_name: formData.company,
+                  company_phone: formData.workNumber,
+                  company_email: formData.companyEmail,
+                  specializations: formData.specializations
+                }
+              };
+              await authAPI.updateProfile(profileData);
+              console.log('Agent profile updated with signup details');
+            } catch (error) {
+              console.error('Error updating agent profile:', error);
+              // Don't block navigation if profile update fails
+            }
+            
             navigate('/dashboard/agent');
-          } else if (formData.userType === 'admin') {
-            // Admin users: navigate to admin dashboard
-            console.log('Admin user registration complete, navigating to admin dashboard');
-            navigate('/dashboard/sysadmin');
           } else if (formData.userType === 'premium') {
             navigate('/dashboard');
           } else {
@@ -563,11 +584,34 @@ const SignUp = () => {
           // Now navigate based on user type
           if (formData.userType === 'agent') {
             console.log('Agent user registration complete, navigating to agent dashboard');
+            
+            // Update agent profile with signup details
+            try {
+              // Upload license if provided
+              if (formData.ceaLicense) {
+                const licenseFormData = new FormData();
+                licenseFormData.append('license_picture', formData.ceaLicense);
+                await authAPI.uploadLicensePicture(licenseFormData);
+              }
+              
+              // Update agent profile with other details
+              const profileData = {
+                agent_info: {
+                  cea_number: formData.ceaNumber,
+                  company_name: formData.company,
+                  company_phone: formData.workNumber,
+                  company_email: formData.companyEmail,
+                  specializations: formData.specializations
+                }
+              };
+              await authAPI.updateProfile(profileData);
+              console.log('Agent profile updated with signup details');
+            } catch (error) {
+              console.error('Error updating agent profile:', error);
+              // Don't block navigation if profile update fails
+            }
+            
             navigate('/dashboard/agent');
-          } else if (formData.userType === 'admin') {
-            // Admin users: navigate to admin dashboard
-            console.log('Admin user registration complete, navigating to admin dashboard');
-            navigate('/dashboard/sysadmin');
           } else if (formData.userType === 'premium') {
             navigate('/dashboard');
           } else {
@@ -897,15 +941,6 @@ const SignUp = () => {
               <span key={index}>✓ {feature}</span>
             ))}
           </div>
-          <div className="admin-note">
-            <small 
-              className={`admin-link ${formData.userType === 'admin' ? 'selected' : ''}`}
-              onClick={() => setFormData(prev => ({ ...prev, userType: 'admin' }))}
-              style={{ cursor: 'pointer' }}
-            >
-              admin
-            </small>
-          </div>
         </div>
 
         {errors.userType && <span className="error-message">{errors.userType}</span>}
@@ -1006,6 +1041,46 @@ const SignUp = () => {
           />
         </div>
         {errors.ceaLicense && <span className="error-message">{errors.ceaLicense}</span>}
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="specializations">Specializations (Property Types) *</label>
+        <div className="signup-specializations-container">
+          {[
+            'Office',
+            'Retail',
+            'Shop House',
+            'Single-user Factory',
+            'Multiple-user Factory',
+            'Warehouse',
+            'Business Parks'
+          ].map(propertyType => (
+            <label key={propertyType} className="signup-specialization-checkbox">
+              <input
+                type="checkbox"
+                checked={formData.specializations.includes(propertyType)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setFormData(prev => ({
+                      ...prev,
+                      specializations: [...prev.specializations, propertyType]
+                    }));
+                  } else {
+                    setFormData(prev => ({
+                      ...prev,
+                      specializations: prev.specializations.filter(s => s !== propertyType)
+                    }));
+                  }
+                }}
+              />
+              <span>{propertyType}</span>
+            </label>
+          ))}
+        </div>
+        {errors.specializations && <span className="error-message">{errors.specializations}</span>}
+        <small className="signup-form-help-text">
+          Select one or more property types you specialize in
+        </small>
       </div>
 
       <div className="step-buttons">
@@ -1212,17 +1287,17 @@ const SignUp = () => {
                     <h3>Summary</h3>
                     <div className="summary-plan">
                       <span className="plan-price">
-                        {formData.userType === 'admin' ? 'Contact Sales' : `$${price}`}{formData.yearlyBilling ? '/year' : '/month'}
+                        ${price}{formData.yearlyBilling ? '/year' : '/month'}
                       </span>
                       <span className="plan-name">
-                        {formData.userType === 'admin' ? 'System Admin' : planName}
+                        {planName}
                       </span>
                     </div>
                     <div className="summary-breakdown">
                       <div className="summary-item">
                         <span>Subtotal:</span>
                         <span>
-                          {formData.userType === 'admin' ? 'Contact Sales' : `$${price}`}
+                          ${price}
                         </span>
                       </div>
                       <div className="summary-item">
@@ -1233,7 +1308,7 @@ const SignUp = () => {
                       <div className="summary-total">
                         <span>Total:</span>
                         <span>
-                          {formData.userType === 'admin' ? 'Contact Sales' : `$${price}`}
+                          ${price}
                         </span>
                       </div>
                     </div>

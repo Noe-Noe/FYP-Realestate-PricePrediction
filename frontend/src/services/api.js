@@ -38,14 +38,22 @@ const apiCall = async (endpoint, method = 'GET', data = null, options = {}) => {
     if (!response.ok) {
       // Try to get error message from response
       let errorMessage = `HTTP error! status: ${response.status}`;
+      let errorData = null;
       try {
-        const errorData = await response.json();
+        errorData = await response.json();
         errorMessage = errorData.error || errorMessage;
       } catch (jsonError) {
         // If response is not JSON (like HTML error page), use status text
         errorMessage = response.statusText || errorMessage;
       }
-      throw new Error(errorMessage);
+      // Create error with response data attached
+      const error = new Error(errorMessage);
+      error.response = {
+        status: response.status,
+        statusText: response.statusText,
+        data: errorData || { error: errorMessage }
+      };
+      throw error;
     }
     
     const data = await response.json();
@@ -167,14 +175,34 @@ export const authAPI = {
     return apiCall('/user/properties');
   },
 
+  // Get review statistics (overall rating, total reviews, star distribution)
+  getReviewStatistics: async () => {
+    return apiCall('/reviews/statistics');
+  },
+
   // Get published reviews for feedback page
   getPublishedReviews: async () => {
     return apiCall('/feedback/reviews');
   },
 
-  // Submit new feedback/review
+  // Submit new review (rating + review text)
+  submitReview: async (reviewData) => {
+    return apiCall('/review/submit', 'POST', reviewData);
+  },
+
+  // Submit new feedback/inquiry (business inquiry - feature request, bug report, etc.)
   submitFeedback: async (feedbackData) => {
     return apiCall('/feedback/submit', 'POST', feedbackData);
+  },
+
+  // Get current user's feedbacks
+  getMyFeedbacks: async () => {
+    return apiCall('/feedback/my-feedbacks');
+  },
+  
+  // Get feedback form types (for user feedback form)
+  getFeedbackFormTypes: async () => {
+    return apiCall('/feedback/form-types');
   },
 
   // Get current user's reviews
@@ -282,6 +310,10 @@ export const authAPI = {
     return apiCall(`/admin/users/${userId}`);
   },
 
+  updateUser: async (userId, userData) => {
+    return apiCall(`/admin/users/${userId}`, 'PUT', userData);
+  },
+
   deactivateUser: async (userId) => {
     return apiCall(`/admin/users/${userId}/deactivate`, 'POST');
   },
@@ -299,8 +331,52 @@ export const authAPI = {
     return apiCall(`/admin/users/${userId}/delete`, 'DELETE');
   },
 
-  getAllFeedback: async (page = 1, perPage = 20) => {
-    return apiCall(`/admin/feedback?page=${page}&per_page=${perPage}`);
+  // Admin Property Management
+  getAllPropertiesAdmin: async (page = 1, perPage = 20) => {
+    return apiCall(`/admin/properties?page=${page}&per_page=${perPage}`);
+  },
+
+  deletePropertyAdmin: async (propertyId) => {
+    return apiCall(`/admin/properties/${propertyId}`, 'DELETE');
+  },
+
+  getAllReviews: async (page = 1, perPage = 20, filterLegit = false, includeML = true, minConfidence = 0.7) => {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      per_page: perPage.toString(),
+      filter_legit: filterLegit.toString(),
+      include_ml: includeML.toString(),
+      min_confidence: minConfidence.toString()
+    });
+    return apiCall(`/admin/reviews?${params.toString()}`);
+  },
+
+  getAllFeedback: async (page = 1, perPage = 20, filterLegit = false, includeML = true, minConfidence = 0.7) => {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      per_page: perPage.toString(),
+      filter_legit: filterLegit.toString(),
+      include_ml: includeML.toString(),
+      min_confidence: minConfidence.toString()
+    });
+    return apiCall(`/admin/feedback?${params.toString()}`);
+  },
+  
+  // Feedback Form Types Management (Admin)
+  getAllFeedbackFormTypes: async () => {
+    return apiCall('/admin/feedback/form-types');
+  },
+  
+  createFeedbackFormType: async (typeData) => {
+    return apiCall('/admin/feedback/form-types', 'POST', typeData);
+  },
+  
+  updateFeedbackFormType: async (typeId, typeData) => {
+    return apiCall(`/admin/feedback/form-types/${typeId}`, 'PUT', typeData);
+  },
+  
+  deleteFeedbackFormType: async (typeId) => {
+    return apiCall(`/admin/feedback/form-types/${typeId}`, 'DELETE');
   },
 
   verifyFeedback: async (feedbackId) => {
@@ -309,15 +385,16 @@ export const authAPI = {
     });
   },
 
-  respondToFeedback: async (feedbackId, adminResponse) => {
+  respondToFeedback: async (feedbackId, adminResponse, type = 'review') => {
     return apiCall('/admin/feedback/respond', 'POST', { 
       feedback_id: feedbackId,
-      admin_response: adminResponse
+      admin_response: adminResponse,
+      type: type
     });
   },
 
-  getFeedbackById: async (feedbackId) => {
-    return apiCall(`/admin/feedback/${feedbackId}`);
+  getFeedbackById: async (feedbackId, type = 'review') => {
+    return apiCall(`/admin/feedback/${feedbackId}?type=${type}`);
   },
 
   unverifyFeedback: async (feedbackId) => {
@@ -350,9 +427,9 @@ export const authAPI = {
 
 // Properties API calls
 export const propertiesAPI = {
-  // Get all properties
-  getAll: async () => {
-    return apiCall('/properties');
+  // Get all properties with pagination
+  getAll: async (page = 1, perPage = 8) => {
+    return apiCall(`/properties?page=${page}&per_page=${perPage}`);
   },
 
   // Get property by ID
@@ -376,9 +453,17 @@ export const propertiesAPI = {
     return apiCall('/properties/nearby', 'POST', { address, limit, propertyType });
   },
 
+  // Filter properties by nearby amenities
+  filterByAmenities: async (amenityTypes, radius = 1000) => {
+    return apiCall('/properties/filter-by-amenities', 'POST', { 
+      amenity_types: amenityTypes,
+      radius 
+    });
+  },
+
   // Get agents assigned to a specific region
-  getAgentsByRegion: async (address) => {
-    return apiCall('/agents/region', 'POST', { address });
+  getAgentsByRegion: async (address, propertyType = null) => {
+    return apiCall('/agents/region', 'POST', { address, property_type: propertyType });
   },
 
 
@@ -713,6 +798,11 @@ export const trialAPI = {
 
 // Price Prediction API calls
 export const predictionAPI = {
+  // Check prediction limit for free users
+  checkLimit: async () => {
+    return apiCall('/predictions/check-limit');
+  },
+
   // Generate ML-based price prediction
   predictPrice: async (propertyData, options = {}) => {
     return apiCall('/predict-price', 'POST', propertyData, options);
@@ -905,6 +995,103 @@ export const importantFeaturesAPI = {
     create: (data) => apiCall('/admin/important-features', 'POST', data),
     update: (id, data) => apiCall(`/admin/important-features/${id}`, 'PUT', data),
     delete: (id) => apiCall(`/admin/important-features/${id}`, 'DELETE'),
+  }
+};
+
+// Property Card Export API
+export const propertyCardAPI = {
+  exportExcel: async (data) => {
+    const url = `${API_BASE_URL}/property-card/export-excel`;
+    const token = localStorage.getItem('accessToken');
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to generate Excel report' }));
+      throw new Error(errorData.error || 'Failed to generate Excel report');
+    }
+    
+    // Get blob and create download link
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    
+    // Extract filename from Content-Disposition header or use default
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = 'property-report.xlsx';
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1].replace(/['"]/g, '');
+        // Handle URL encoding
+        try {
+          filename = decodeURIComponent(filename);
+        } catch (e) {
+          // If decoding fails, use as is
+        }
+      }
+    }
+    
+    // Create download link - completely isolated to prevent React Router interference
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    
+    // Style to be completely hidden and non-interactive
+    Object.assign(link.style, {
+      display: 'none',
+      visibility: 'hidden',
+      position: 'absolute',
+      top: '-9999px',
+      left: '-9999px',
+      width: '1px',
+      height: '1px',
+      opacity: '0',
+      pointerEvents: 'none'
+    });
+    
+    // Prevent link from being detected by React Router or any navigation handlers
+    link.setAttribute('data-react-router-ignore', 'true');
+    
+    // Append to a container that's outside React's control
+    const container = document.createElement('div');
+    container.style.display = 'none';
+    container.appendChild(link);
+    document.body.appendChild(container);
+    
+    // Use microtask to trigger download after DOM is updated
+    Promise.resolve().then(() => {
+      // Trigger download
+      link.click();
+      
+      // Remove immediately after click to prevent any interference
+      setTimeout(() => {
+        try {
+          if (container.parentNode) {
+            document.body.removeChild(container);
+          }
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        
+        // Revoke URL after download has initiated
+        setTimeout(() => {
+          try {
+            window.URL.revokeObjectURL(downloadUrl);
+          } catch (e) {
+            // Ignore revocation errors
+          }
+        }, 200);
+      }, 0);
+    });
+    
+    return { success: true };
   }
 };
 

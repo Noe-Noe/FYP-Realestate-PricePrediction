@@ -11,6 +11,8 @@ const UserAccount = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('user-accounts');
   const [searchQuery, setSearchQuery] = useState('');
+  const [userTypeFilter, setUserTypeFilter] = useState('all');
+  const [accountStatusFilter, setAccountStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
 
   // State for real user data
@@ -27,10 +29,10 @@ const UserAccount = () => {
         setLoading(true);
         setError(null);
         
-        const response = await authAPI.getAllUsers(currentPage, 20);
+        const response = await authAPI.getAllUsers(currentPage, 8);
         setUserAccounts(response.users || []);
         setTotalUsers(response.total || 0);
-        setTotalPages(response.pages || 1);
+        setTotalPages(response.pages || Math.ceil((response.total || 0) / 8));
         
       } catch (err) {
         console.error('Error fetching users:', err);
@@ -43,16 +45,31 @@ const UserAccount = () => {
     fetchUsers();
   }, [currentPage]);
 
-  // Filter users based on search query
-  const filteredUsers = userAccounts.filter(user =>
+  // Filter users based on search query and filters
+  const filteredUsers = userAccounts.filter(user => {
+    const matchesSearch = 
     user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.referral_code?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      user.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesUserType = userTypeFilter === 'all' || user.user_type === userTypeFilter;
+    const matchesAccountStatus = accountStatusFilter === 'all' || user.subscription_status?.toLowerCase() === accountStatusFilter.toLowerCase();
+    
+    return matchesSearch && matchesUserType && matchesAccountStatus;
+  });
 
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
     setCurrentPage(1); // Reset to first page when searching
+  };
+
+  const handleUserTypeFilterChange = (e) => {
+    setUserTypeFilter(e.target.value);
+    setCurrentPage(1); // Reset to first page when filtering
+  };
+
+  const handleAccountStatusFilterChange = (e) => {
+    setAccountStatusFilter(e.target.value);
+    setCurrentPage(1); // Reset to first page when filtering
   };
 
   const handleUserClick = (userId) => {
@@ -97,17 +114,43 @@ const UserAccount = () => {
           </div>
           
           <div className="user-account-content">
-            {/* Search Section */}
+            {/* Search and Filter Section */}
             <div className="user-account-search-section">
               <div className="user-account-search-container">
                 <span className="user-account-search-icon">🔍</span>
                 <input
                   type="text"
                   className="user-account-search-input"
-                  placeholder="Search by name, email, or referral code"
+                  placeholder="Search by name or email"
                   value={searchQuery}
                   onChange={handleSearch}
                 />
+              </div>
+              
+              {/* Filter Dropdowns */}
+              <div className="user-account-filters">
+                <select
+                  className="user-account-filter-select"
+                  value={userTypeFilter}
+                  onChange={handleUserTypeFilterChange}
+                >
+                  <option value="all">All User Types</option>
+                  <option value="free">Free</option>
+                  <option value="premium">Premium</option>
+                  <option value="agent">Agent</option>
+                  <option value="admin">Admin</option>
+                </select>
+                
+                <select
+                  className="user-account-filter-select"
+                  value={accountStatusFilter}
+                  onChange={handleAccountStatusFilterChange}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
               </div>
             </div>
 
@@ -136,7 +179,6 @@ const UserAccount = () => {
                     <tr>
                       <th>Name</th>
                       <th>Email</th>
-                      <th>Referral Code</th>
                       <th>User Type</th>
                       <th>Account Created Date</th>
                       <th>Account Status</th>
@@ -149,9 +191,6 @@ const UserAccount = () => {
                         <tr key={user.id} className="user-account-user-row" onClick={() => handleUserClick(user.id)}>
                           <td className="user-account-user-name">{user.full_name}</td>
                           <td className="user-account-user-email">{user.email}</td>
-                          <td className="user-account-referral-code">
-                            {user.referral_code || (user.user_type === 'premium' ? 'Generating...' : 'N/A')}
-                          </td>
                           <td className="subscription-status">
                             <span className={getSubscriptionBadgeClass(user.user_type)}>
                               {user.user_type}

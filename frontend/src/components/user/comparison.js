@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GOOGLE_MAPS_API_KEY } from '../../config/maps';
 import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
 import PropertyCard from './PropertyCard';
-import { bookmarksAPI, predictionAPI } from '../../services/api';
+import { bookmarksAPI, predictionAPI, propertyCardAPI } from '../../services/api';
 import './comparison.css';
 
 const GOOGLE_MAPS_LIBRARIES = ['places', 'geometry'];
@@ -73,6 +73,8 @@ const Comparison = () => {
   const [property2MlData, setProperty2MlData] = useState(null);
   const [isLoadingMlPredictions, setIsLoadingMlPredictions] = useState(false);
   const [mlPredictionError, setMlPredictionError] = useState('');
+  const [property1CardData, setProperty1CardData] = useState({ nearbyProperties: [], regionAgents: [] });
+  const [property2CardData, setProperty2CardData] = useState({ nearbyProperties: [], regionAgents: [] });
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -337,10 +339,59 @@ const Comparison = () => {
     }
   };
 
-  const handleDownloadReport = () => {
-    // Download functionality
-    console.log('Downloading report...');
+  const handleDownloadReport = async (e) => {
+    // Prevent any navigation or event bubbling
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Check if user is free - show upgrade message
+    const userType = localStorage.getItem('userType') || 'free';
+    if (userType.toLowerCase() === 'free') {
+      alert('Report download is not available for free users. Please upgrade to Premium to download reports.');
+      return;
+    }
+    
+    try {
+      // Prepare data for Excel export - comparison mode with both properties
+      const exportData = {
+        isComparison: true,
+        property1: {
+          property: properties[0],
+          comparisonData: comparisonData.property1,
+          mlPredictionData: property1MlData,
+          nearbyProperties: property1CardData.nearbyProperties || [],
+          regionAgents: property1CardData.regionAgents || []
+        },
+        property2: {
+          property: properties[1],
+          comparisonData: comparisonData.property2,
+          mlPredictionData: property2MlData,
+          nearbyProperties: property2CardData.nearbyProperties || [],
+          regionAgents: property2CardData.regionAgents || []
+        }
+      };
+      
+      await propertyCardAPI.exportExcel(exportData);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      const errorMessage = error.message || 'Failed to download report. Please try again.';
+      if (errorMessage.includes('upgrade') || errorMessage.includes('free users')) {
+        alert(errorMessage);
+      } else {
+        alert('Failed to download report. Please try again.');
+      }
+    }
   };
+
+  const handleProperty1CardDataUpdate = useCallback((data) => {
+    setProperty1CardData(data);
+  }, []); // Empty deps - we only want to update state, not recreate the function
+
+  const handleProperty2CardDataUpdate = useCallback((data) => {
+    setProperty2CardData(data);
+  }, []); // Empty deps - we only want to update state, not recreate the function
 
   const handleBookmarkComparison = async () => {
     try {
@@ -586,10 +637,21 @@ const Comparison = () => {
 
           {/* Action Buttons */}
           <div className="comparison-action-buttons">
-            <button className="comparison-action-btn comparison-download-btn" onClick={handleDownloadReport}>
-              <span className="comparison-btn-icon">📥</span>
-              Download Report
-            </button>
+            {(() => {
+              const userType = localStorage.getItem('userType') || 'free';
+              const isFreeUser = userType.toLowerCase() === 'free';
+              
+              if (isFreeUser) {
+                return null; // Hide download button for free users
+              }
+              
+              return (
+                <button className="comparison-action-btn comparison-download-btn" onClick={handleDownloadReport}>
+                  <span className="comparison-btn-icon">📥</span>
+                  Download Report
+                </button>
+              );
+            })()}
             <button 
               className={`comparison-action-btn comparison-bookmark-btn ${isComparisonBookmarked ? 'active' : ''}`}
               onClick={handleBookmarkComparison}
@@ -626,6 +688,8 @@ const Comparison = () => {
                isLoadingAmenities={property1LoadingAmenities}
                amenitiesError={property1AmenitiesError}
                amenityOptions={AMENITY_OPTIONS}
+               // Data callback for export
+               onDataUpdate={handleProperty1CardDataUpdate}
              />
 
              {/* VS Indicator */}
@@ -647,6 +711,8 @@ const Comparison = () => {
                isLoadingAmenities={property2LoadingAmenities}
                amenitiesError={property2AmenitiesError}
                amenityOptions={AMENITY_OPTIONS}
+               // Data callback for export
+               onDataUpdate={handleProperty2CardDataUpdate}
              />
            </div>
         </main>

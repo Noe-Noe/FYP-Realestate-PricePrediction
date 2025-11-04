@@ -11,12 +11,34 @@ const PropertyListings = () => {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProperties, setTotalProperties] = useState(0);
+  // Amenity options for filtering
+  const AMENITY_OPTIONS = [
+    { type: 'school', label: 'Schools', icon: '🏫' },
+    { type: 'shopping_mall', label: 'Shopping Malls', icon: '🏬' },
+    { type: 'hospital', label: 'Hospitals', icon: '🏥' },
+    { type: 'subway_station', label: 'MRT Stations', icon: '🚇' },
+    { type: 'bus_station', label: 'Bus Stations', icon: '🚌' },
+    { type: 'supermarket', label: 'Supermarkets', icon: '🛒' },
+    { type: 'restaurant', label: 'Restaurants', icon: '🍽️' },
+    { type: 'gym', label: 'Gyms', icon: '💪' },
+    { type: 'park', label: 'Parks', icon: '🌳' },
+    { type: 'bank', label: 'Banks', icon: '🏦' }
+  ];
+
   const [filters, setFilters] = useState({
     propertyType: 'all',
     priceRange: 'all',
     location: 'all',
-    transactionType: 'all' // New filter for rental/buy
+    transactionType: 'all', // New filter for rental/buy
+    amenities: [] // Array of selected amenity types
   });
+  const [nearbyProperties, setNearbyProperties] = useState([]); // Properties near selected amenities
+  const [isFilteringByAmenities, setIsFilteringByAmenities] = useState(false);
+  const [amenityRadius, setAmenityRadius] = useState(1000); // Radius in meters (default 1km)
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(null); // Track if API key is configured (null = unknown)
   const navigate = useNavigate();
 
   // Fetch properties from database
@@ -25,9 +47,11 @@ const PropertyListings = () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await propertiesAPI.getAll();
+        const response = await propertiesAPI.getAll(currentPage, 8);
         console.log('Fetched properties from database:', response);
         setProperties(response.properties || []);
+        setTotalProperties(response.total || 0);
+        setTotalPages(response.pages || Math.ceil((response.total || 0) / 8));
       } catch (err) {
         console.error('Error fetching properties:', err);
         setError('Failed to load properties. Please try again later.');
@@ -38,7 +62,7 @@ const PropertyListings = () => {
     };
 
     fetchProperties();
-  }, []);
+  }, [currentPage]);
 
   const handleFilterChange = (filterType, value) => {
     setFilters(prev => {
@@ -51,6 +75,9 @@ const PropertyListings = () => {
       if (filterType === 'transactionType') {
         newFilters.priceRange = 'all';
       }
+      
+      // Reset to first page when filters change
+      setCurrentPage(1);
       
       return newFilters;
     });
@@ -205,6 +232,23 @@ const PropertyListings = () => {
       }
     }
 
+    // Amenity filter - only show properties that are near selected amenities
+    // If amenities are selected, only show properties that are in the nearbyProperties list
+    if (filters.amenities.length > 0) {
+      // If we're still loading, don't show any properties yet
+      if (isFilteringByAmenities) {
+        return false;
+      }
+      // If loading is complete but no nearby properties found, don't show this property
+      if (nearbyProperties.length === 0) {
+        return false;
+      }
+      // Only show properties that are in the nearbyProperties list
+      if (!nearbyProperties.includes(property.id)) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -213,9 +257,66 @@ const PropertyListings = () => {
       transactionType: 'all',
       propertyType: 'all',
       priceRange: 'all',
-      location: 'all'
+      location: 'all',
+      amenities: []
     });
+    setNearbyProperties([]);
+    setIsFilteringByAmenities(false);
   };
+
+  // Handle amenity filter toggle
+  const handleAmenityToggle = async (amenityType) => {
+    const newAmenities = filters.amenities.includes(amenityType)
+      ? filters.amenities.filter(a => a !== amenityType)
+      : [...filters.amenities, amenityType];
+    
+    setFilters(prev => ({
+      ...prev,
+      amenities: newAmenities
+    }));
+
+    // If amenities are selected, fetch properties near those amenities
+    if (newAmenities.length > 0) {
+      await fetchPropertiesNearAmenities(newAmenities);
+    } else {
+      setNearbyProperties([]);
+      setIsFilteringByAmenities(false);
+    }
+  };
+
+  // Fetch properties near selected amenities
+  const fetchPropertiesNearAmenities = async (amenityTypes) => {
+    try {
+      setIsFilteringByAmenities(true);
+      console.log('🔍 Fetching properties near amenities:', amenityTypes, 'with radius:', amenityRadius);
+      const response = await propertiesAPI.filterByAmenities(amenityTypes, amenityRadius);
+      console.log('✅ Backend response:', response);
+      
+      if (response && response.property_ids) {
+        setNearbyProperties(response.property_ids);
+        setApiKeyConfigured(response.api_key_configured !== false); // Default to true if not specified
+        console.log(`✅ Found ${response.property_ids.length} properties near selected amenities`);
+        console.log(`🔑 API Key configured: ${response.api_key_configured !== false}`);
+      } else {
+        setNearbyProperties([]);
+        setApiKeyConfigured(false);
+        console.log('⚠️ No property_ids in response, setting to empty array');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching properties near amenities:', error);
+      setNearbyProperties([]);
+    } finally {
+      setIsFilteringByAmenities(false);
+    }
+  };
+
+  // Update when radius changes (if amenities are already selected)
+  useEffect(() => {
+    if (filters.amenities.length > 0 && !isFilteringByAmenities) {
+      fetchPropertiesNearAmenities(filters.amenities);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amenityRadius]);
 
   // Get counts for different transaction types and location categories
   const getTransactionCounts = () => {
@@ -311,7 +412,7 @@ const PropertyListings = () => {
           {/* Results Count */}
           <div className="results-count">
             <div className="results-summary">
-              Showing {filteredProperties.length} of {properties.length} properties
+              Showing {filteredProperties.length} out of {totalProperties} properties
             </div>
             <div className="transaction-counts">
               <span className="count-item buy">
@@ -402,6 +503,71 @@ const PropertyListings = () => {
             </div>
           </div>
 
+          {/* Amenity Filters */}
+          <div className="amenity-filters-section">
+            <div className="amenity-filters-header">
+              <label>Filter by Nearby Amenities</label>
+              <div className="amenity-radius-selector">
+                <label htmlFor="amenityRadius">Within:</label>
+                <select
+                  id="amenityRadius"
+                  value={amenityRadius}
+                  onChange={(e) => setAmenityRadius(Number(e.target.value))}
+                >
+                  <option value={500}>500m</option>
+                  <option value={1000}>1km</option>
+                  <option value={2000}>2km</option>
+                  <option value={5000}>5km</option>
+                </select>
+              </div>
+            </div>
+            <div className="amenity-filters-grid">
+              {AMENITY_OPTIONS.map(amenity => (
+                <button
+                  key={amenity.type}
+                  type="button"
+                  className={`amenity-filter-btn ${filters.amenities.includes(amenity.type) ? 'active' : ''}`}
+                  onClick={() => handleAmenityToggle(amenity.type)}
+                  disabled={isFilteringByAmenities}
+                >
+                  <span className="amenity-icon">{amenity.icon}</span>
+                  <span className="amenity-label">{amenity.label}</span>
+                  {filters.amenities.includes(amenity.type) && (
+                    <span className="amenity-check">✓</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            {isFilteringByAmenities && (
+              <div className="amenity-loading">
+                <span>Searching for properties near amenities...</span>
+              </div>
+            )}
+            {filters.amenities.length > 0 && !isFilteringByAmenities && (
+              <div className="amenity-filter-info">
+                {!apiKeyConfigured ? (
+                  <div className="amenity-error-message">
+                    ⚠️ Google Maps API key not configured
+                    <br />
+                    <small>For accurate amenity filtering, please set GOOGLE_MAPS_API_KEY in your backend environment variables. Currently showing all properties for testing.</small>
+                  </div>
+                ) : nearbyProperties.length > 0 ? (
+                  <>
+                    Showing properties within {amenityRadius}m of {filters.amenities.length} selected amenit{filters.amenities.length === 1 ? 'y' : 'ies'}
+                    <br />
+                    <small>Found {nearbyProperties.length} matching propert{nearbyProperties.length === 1 ? 'y' : 'ies'}</small>
+                  </>
+                ) : (
+                  <div className="amenity-error-message">
+                    ⚠️ No properties found near selected amenities
+                    <br />
+                    <small>Try adjusting the radius or selecting different amenities.</small>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Properties Grid */}
           {filteredProperties.length > 0 ? (
             <div className="properties-grid">
@@ -444,6 +610,29 @@ const PropertyListings = () => {
               <p>No properties found matching your criteria.</p>
               <button onClick={resetFilters}>
                 Clear All Filters
+              </button>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="property-listings-pagination">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="pagination-btn"
+              >
+                Previous
+              </button>
+              <span className="pagination-info">
+                Page {currentPage} of {totalPages} ({totalProperties} total properties)
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="pagination-btn"
+              >
+                Next
               </button>
             </div>
           )}

@@ -56,7 +56,6 @@ class Property(db.Model):
     parking_spaces = db.Column(db.Integer)
     asking_price = db.Column(db.Numeric(12, 2), nullable=False)
     price_type = db.Column(db.String(20), default='sale')
-    rental_price = db.Column(db.Numeric(12, 2))  # Monthly rental price
     status = db.Column(db.String(20), default='active')
     latitude = db.Column(db.Numeric(10, 8))
     longitude = db.Column(db.Numeric(11, 8))
@@ -73,11 +72,7 @@ class AgentProfile(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
-    license_number = db.Column(db.String(50))
-    license_issue_date = db.Column(db.Date)  # When license was issued
-    license_expiry_date = db.Column(db.Date)  # When license expires
-    cea_verified = db.Column(db.Boolean, default=False)  # CEA database verification status
-    cea_verification_date = db.Column(db.DateTime)  # When CEA verification was completed
+    license_number = db.Column(db.String(100))
     company_name = db.Column(db.String(255))
     company_phone = db.Column(db.String(20))
     company_email = db.Column(db.String(255))
@@ -128,6 +123,8 @@ class BusinessInquiry(db.Model):
     message = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), default='new')
     assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    admin_response = db.Column(db.Text, nullable=True)  # Admin response to the inquiry
+    admin_response_date = db.Column(db.DateTime, nullable=True)  # When admin responded
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -274,7 +271,7 @@ class FeaturesStep(db.Model):
     step_title = db.Column(db.String(255), nullable=False)
     step_description = db.Column(db.Text, nullable=False)
     step_image = db.Column(db.String(500))
-    step_video = db.Column(db.String(500))
+    # step_video column removed - doesn't exist in database table
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -311,6 +308,17 @@ class LegalContent(db.Model):
     content = db.Column(db.Text, nullable=False)
     version = db.Column(db.String(20), default='1.0')
     is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class FeedbackFormType(db.Model):
+    __tablename__ = 'feedback_form_types'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)  # Display name (e.g., "General Feedback")
+    value = db.Column(db.String(50), unique=True, nullable=False)  # Internal value (e.g., "general")
+    status = db.Column(db.String(20), default='active')  # 'active' or 'inactive'
+    display_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
