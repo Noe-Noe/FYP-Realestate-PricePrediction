@@ -1,0 +1,30 @@
+/* Common styles for agent components */
+/* This file contains only truly shared utilities and base styles */
+
+/* Base font family for all agent components */
+* {
+  box-sizing: border-box;
+}
+
+/* Common button reset */
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Common input reset */
+input, select, textarea {
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+/* Common focus styles */
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
