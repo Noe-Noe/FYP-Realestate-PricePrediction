@@ -9,11 +9,13 @@ import api from '../../services/api';
 const EditTeamMember = () => {
   const { memberId } = useParams();
   const [activeTab, setActiveTab] = useState('content');
+  const [imageSource, setImageSource] = useState('upload'); // 'upload' or 'url'
   const [formData, setFormData] = useState({
     name: '',
     role: '',
     description: '',
     image: null,
+    imageUrl: '',
     imagePreview: null,
     social_links: {}
   });
@@ -29,14 +31,23 @@ const EditTeamMember = () => {
         
         if (response.success) {
           const member = response.member;
+          const existingImageUrl = member.image_url || '';
+          
+          // Determine if existing image is a URL (starts with http) or file path
+          const isUrl = existingImageUrl && (existingImageUrl.startsWith('http://') || existingImageUrl.startsWith('https://'));
+          
           setFormData({
             name: member.name,
             role: member.role,
             description: member.description || '',
             image: null,
-            imagePreview: member.image_url,
+            imageUrl: isUrl ? existingImageUrl : '',
+            imagePreview: existingImageUrl,
             social_links: member.social_links || {}
           });
+          
+          // Set image source based on existing image type
+          setImageSource(isUrl ? 'url' : 'upload');
         } else {
           setMessage('Error loading team member');
         }
@@ -66,7 +77,8 @@ const EditTeamMember = () => {
     if (file) {
       setFormData(prev => ({
         ...prev,
-        image: file
+        image: file,
+        imageUrl: '' // Clear URL when file is selected
       }));
 
       const reader = new FileReader();
@@ -78,6 +90,27 @@ const EditTeamMember = () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleImageUrlChange = (e) => {
+    const url = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      imageUrl: url,
+      image: null, // Clear file when URL is entered
+      imagePreview: url || prev.imagePreview // Set preview to URL if provided, otherwise keep existing
+    }));
+  };
+
+  const handleImageSourceChange = (source) => {
+    setImageSource(source);
+    // Clear file/imageUrl when switching, but keep preview if it's from existing data
+    setFormData(prev => ({
+      ...prev,
+      image: null,
+      imageUrl: source === 'url' ? prev.imageUrl : ''
+      // Keep imagePreview to show existing image
+    }));
   };
 
   const handleSaveTeamMember = async () => {
@@ -96,10 +129,11 @@ const EditTeamMember = () => {
       setSaving(true);
       setMessage(''); // Clear any previous messages
       
-      let imageUrl = formData.imagePreview; // Keep existing image URL
+      let imageUrl = formData.imagePreview; // Keep existing image URL by default
       
-      // If a new image was uploaded, upload it first
-      if (formData.image) {
+      // Handle image based on source type
+      if (imageSource === 'upload' && formData.image) {
+        // Upload file if new file was selected
         try {
           const uploadResponse = await api.team.uploadProfilePicture(formData.image);
           if (uploadResponse.profile_picture_url) {
@@ -110,6 +144,20 @@ const EditTeamMember = () => {
           setMessage('Error uploading image. Please try again.');
           return;
         }
+      } else if (imageSource === 'url' && formData.imageUrl.trim()) {
+        // Use URL directly if URL was provided
+        imageUrl = formData.imageUrl.trim();
+        
+        // Basic URL validation
+        try {
+          new URL(imageUrl);
+        } catch {
+          setMessage('Error: Please enter a valid URL');
+          return;
+        }
+      } else if (imageSource === 'url' && !formData.imageUrl.trim() && !formData.imagePreview) {
+        // If URL mode but no URL provided and no existing image, set to empty
+        imageUrl = '';
       }
       
       const memberData = {
@@ -229,7 +277,34 @@ const EditTeamMember = () => {
             </div>
 
             <div className="edit-team-member-form-group">
-              <label htmlFor="image" className="edit-team-member-form-label">Profile Image</label>
+              <label className="edit-team-member-form-label">Profile Image</label>
+              
+              {/* Image Source Selection */}
+              <div className="edit-team-member-image-source-selection" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', marginRight: '20px', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="imageSource"
+                    value="upload"
+                    checked={imageSource === 'upload'}
+                    onChange={() => handleImageSourceChange('upload')}
+                    style={{ marginRight: '8px' }}
+                  />
+                  Upload File
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="imageSource"
+                    value="url"
+                    checked={imageSource === 'url'}
+                    onChange={() => handleImageSourceChange('url')}
+                    style={{ marginRight: '8px' }}
+                  />
+                  Image URL
+                </label>
+              </div>
+
               <div className="edit-team-member-image-upload-section">
                 {formData.imagePreview && (
                   <div className="edit-team-member-image-preview">
@@ -237,20 +312,40 @@ const EditTeamMember = () => {
                       src={formData.imagePreview}
                       alt="Profile preview"
                       className="edit-team-member-preview-image"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        setMessage('Error: Could not load image from URL');
+                      }}
                     />
                   </div>
                 )}
-                <input
-                  type="file"
-                  id="image"
-                  name="image"
-                  onChange={handleImageUpload}
-                  className="edit-team-member-file-input"
-                  accept="image/*"
-                />
-                <label htmlFor="image" className="edit-team-member-upload-btn">
-                  {formData.imagePreview ? 'Change Image' : 'Upload Profile Image'}
-                </label>
+                
+                {imageSource === 'upload' ? (
+                  <>
+                    <input
+                      type="file"
+                      id="image"
+                      name="image"
+                      onChange={handleImageUpload}
+                      className="edit-team-member-file-input"
+                      accept="image/*"
+                    />
+                    <label htmlFor="image" className="edit-team-member-upload-btn">
+                      {formData.imagePreview ? 'Change Image' : 'Upload Profile Image'}
+                    </label>
+                  </>
+                ) : (
+                  <input
+                    type="url"
+                    id="imageUrl"
+                    name="imageUrl"
+                    value={formData.imageUrl}
+                    onChange={handleImageUrlChange}
+                    className="edit-team-member-form-input"
+                    placeholder="Enter image URL (e.g., https://example.com/image.jpg)"
+                    style={{ marginTop: '10px' }}
+                  />
+                )}
               </div>
             </div>
 

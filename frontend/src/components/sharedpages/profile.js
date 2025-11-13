@@ -27,7 +27,8 @@ const Profile = () => {
     agentCompany: '',
     companyPhoneNumber: '',
     companyEmail: '',
-    specializations: [] // Array of selected property type specializations
+    specializations: [], // Array of selected property type specializations
+    registrationStartDate: ''
   });
 
   // Property types for specialization (same as price prediction)
@@ -126,12 +127,40 @@ const Profile = () => {
             // Fetch agent profile data
             const agentProfileResponse = await authAPI.getAgentProfile();
             if (agentProfileResponse) {
+              // Handle specializations - ensure it's an array
+              let specializations = [];
+              if (agentProfileResponse.specializations) {
+                if (Array.isArray(agentProfileResponse.specializations)) {
+                  specializations = agentProfileResponse.specializations;
+                } else if (typeof agentProfileResponse.specializations === 'string') {
+                  try {
+                    specializations = JSON.parse(agentProfileResponse.specializations);
+                  } catch (e) {
+                    specializations = [];
+                  }
+                }
+              }
+              
+              // Format registration start date for date input (YYYY-MM-DD)
+              let registrationStartDate = '';
+              if (agentProfileResponse.registration_start_date) {
+                try {
+                  const date = new Date(agentProfileResponse.registration_start_date);
+                  if (!isNaN(date.getTime())) {
+                    registrationStartDate = date.toISOString().split('T')[0];
+                  }
+                } catch (e) {
+                  console.error('Error parsing registration_start_date:', e);
+                }
+              }
+              
               setAgentFormData({
                 ceaNumber: agentProfileResponse.cea_number || '',
                 agentCompany: agentProfileResponse.company_name || '',
                 companyPhoneNumber: agentProfileResponse.company_phone || '',
                 companyEmail: agentProfileResponse.company_email || '',
-                specializations: agentProfileResponse.specializations || []
+                specializations: specializations,
+                registrationStartDate: registrationStartDate
               });
               
               // Set license picture URL if it exists
@@ -146,7 +175,8 @@ const Profile = () => {
               ceaNumber: '',
               agentCompany: '',
               companyPhoneNumber: '',
-              companyEmail: ''
+              companyEmail: '',
+              registrationStartDate: ''
             });
           }
         }
@@ -329,7 +359,8 @@ const Profile = () => {
           company_name: agentFormData.agentCompany,
           company_phone: agentFormData.companyPhoneNumber,
           company_email: agentFormData.companyEmail,
-          specializations: agentFormData.specializations
+          specializations: agentFormData.specializations,
+          registration_start_date: agentFormData.registrationStartDate
         };
       }
       
@@ -361,12 +392,40 @@ const Profile = () => {
           }
         }
         
+        // Handle contact preferences - ensure it's an array
+        let contactPreferences = [];
+        if (response.agent_profile.contact_preferences) {
+          if (Array.isArray(response.agent_profile.contact_preferences)) {
+            contactPreferences = response.agent_profile.contact_preferences;
+          } else if (typeof response.agent_profile.contact_preferences === 'string') {
+            try {
+              contactPreferences = JSON.parse(response.agent_profile.contact_preferences);
+            } catch (e) {
+              contactPreferences = [];
+            }
+          }
+        }
+        
+        // Format registration start date for date input (YYYY-MM-DD)
+        let registrationStartDate = '';
+        if (response.agent_profile.registration_start_date) {
+          try {
+            const date = new Date(response.agent_profile.registration_start_date);
+            if (!isNaN(date.getTime())) {
+              registrationStartDate = date.toISOString().split('T')[0];
+            }
+          } catch (e) {
+            console.error('Error parsing registration_start_date:', e);
+          }
+        }
+        
         setAgentFormData({
           ceaNumber: response.agent_profile.cea_number || '',
           agentCompany: response.agent_profile.company_name || '',
           companyPhoneNumber: response.agent_profile.company_phone || '',
           companyEmail: response.agent_profile.company_email || '',
-          specializations: specializations
+          specializations: specializations,
+          registrationStartDate: registrationStartDate
         });
         
         // Update license picture URL if provided
@@ -932,6 +991,21 @@ const Profile = () => {
                 </div>
                 <small className="profile-form-help-text">
                   Select one or more property types you specialize in
+                </small>
+              </div>
+              <div className="profile-form-group">
+                <label htmlFor="registrationStartDate">Registration Start Date</label>
+                <input
+                  type="date"
+                  id="registrationStartDate"
+                  name="registrationStartDate"
+                  value={agentFormData.registrationStartDate}
+                  onChange={(e) => setAgentFormData(prev => ({ ...prev, registrationStartDate: e.target.value }))}
+                  placeholder="Select registration start date"
+                  disabled={isLoading}
+                />
+                <small className="profile-form-help-text">
+                  The date when you started your agent registration
                 </small>
               </div>
             </section>

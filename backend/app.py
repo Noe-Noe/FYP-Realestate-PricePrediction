@@ -7,10 +7,12 @@ import time
 import subprocess
 import json
 import sys
+import threading
+import csv
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask_mail import Mail, Message
-from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, Region, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature, FeaturesSection, FeaturesStep, UserProfile
+from models import db, User, Property, PropertyAmenity, PropertyImage, AgentProfile, Region, AgentRegion, PropertyView, BusinessInquiry, PricePrediction, FAQEntry, FAQSection, ContentSection, Bookmark, TeamSection, TeamMember, LegalContent, SubscriptionPlan, SubscriptionPlanFeature, ImportantFeature, FeaturesSection, FeaturesStep, UserProfile, EmailVerificationCode, PasswordResetCode
 from sqlalchemy import text
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -107,6 +109,23 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
 # Initialize database with app
 db.init_app(app)
+
+# Ensure database tables exist (run on app initialization)
+def ensure_tables_exist():
+    """Ensure all database tables exist, create them if they don't"""
+    try:
+        with app.app_context():
+            db.create_all()
+            print("✅ Database tables checked/created successfully")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not create database tables on startup: {e}")
+        print("Tables will be created on first use")
+
+# Try to create tables on startup (but don't fail if it doesn't work)
+try:
+    ensure_tables_exist()
+except Exception as e:
+    print(f"⚠️ Could not initialize tables on startup: {e}")
 
 # Gmail SMTP Configuration
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -321,8 +340,43 @@ def register():
         return jsonify({'error': 'Password must be at least 8 characters long'}), 400
     
     # Check if user already exists
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'User already exists'}), 409
+    existing_user = User.query.filter_by(email=data['email']).first()
+    
+    if existing_user:
+        # If user exists and is active, return error
+        if existing_user.is_active and existing_user.subscription_status != 'cancelled':
+            return jsonify({'error': 'User already exists'}), 409
+        
+        # If user is suspended, they cannot reactivate by signing up - must contact support
+        if existing_user.subscription_status == 'cancelled':
+            return jsonify({
+                'error': 'Your account has been suspended. Please contact support to reactivate your account.'
+            }), 403
+        
+        # If user exists but is deactivated (not suspended), reactivate the account
+        try:
+            existing_user.is_active = True
+            existing_user.subscription_status = 'active'
+            existing_user.full_name = data['full_name']  # Update name in case it changed
+            if data.get('phone_number'):
+                existing_user.phone_number = data.get('phone_number')
+            existing_user.set_password(password)  # Update password
+            existing_user.user_type = data.get('user_type', existing_user.user_type)  # Update user type if provided
+            
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Account reactivated successfully',
+                'user_id': existing_user.id,
+                'email': existing_user.email,
+                'full_name': existing_user.full_name
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error reactivating user: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': 'Failed to reactivate account'}), 500
     
     # Create new user
     user = User(
@@ -367,6 +421,18 @@ def login():
     user = User.query.filter_by(email=data['email']).first()
     
     if user and user.check_password(data['password']):
+        # Check if user account is active
+        if not user.is_active:
+            return jsonify({
+                'error': 'Your account has been deactivated. Please sign up again to reactivate your account.'
+            }), 403
+        
+        # Check if user account is suspended
+        if user.subscription_status == 'cancelled':
+            return jsonify({
+                'error': 'Your account has been suspended. Please contact support for assistance.'
+            }), 403
+        
         # Update last login
         user.last_login = datetime.utcnow()
         db.session.commit()
@@ -387,31 +453,76 @@ def login():
     else:
         return jsonify({'error': 'Invalid credentials'}), 401
 
-# Email verification storage (in production, use Redis or database)
-email_verification_codes = {}
-
-# Password reset storage (in production, use Redis or database)
-password_reset_codes = {}
+# Email verification and password reset now use database (shared across all server instances)
+# The old in-memory dictionaries are removed - all OTPs are stored in database tables
 
 # Generate OTP code
 def generate_otp():
     return ''.join(random.choices(string.digits, k=6))
 
-# Send OTP to email using Gmail SMTP
-def send_otp_email(email, otp):
+# Send OTP to email using Gmail SMTP (synchronous version for threading)
+def send_otp_email_sync(email, otp):
+    """Send OTP email synchronously - to be called from a thread"""
     try:
-        msg = Message(
-            'Your Valuez Verification Code',
-            sender='bearmeh00@gmail.com',  # ← Now matches your MAIL_USERNAME
-            recipients=[email]
-        )
-        msg.body = f'Your verification code is: {otp}'
-        mail.send(msg)
-        print(f"📧 Email sent successfully to {email}")
-        return True
+        # Create a new Flask application context for the thread
+        with app.app_context():
+            msg = Message(
+                'Your Valuez Verification Code',
+                sender='bearmeh00@gmail.com',  # ← Now matches your MAIL_USERNAME
+                recipients=[email]
+            )
+            msg.body = f'Your verification code is: {otp}'
+            mail.send(msg)
+            print(f"📧 Email sent successfully to {email}")
+            return True
     except Exception as e:
         print(f"❌ Failed to send email: {e}")
         return False
+
+# Send OTP to email asynchronously (non-blocking)
+def send_otp_email_async(email, otp):
+    """Send OTP email in a background thread to avoid blocking the API response"""
+    thread = threading.Thread(target=send_otp_email_sync, args=(email, otp))
+    thread.daemon = True  # Thread will die when main process exits
+    thread.start()
+    return True  # Return immediately, email will be sent in background
+
+# Send password recovery email synchronously (for threading)
+def send_password_recovery_email_sync(email, otp, user_name):
+    """Send password recovery email synchronously - to be called from a thread"""
+    try:
+        with app.app_context():
+            msg = Message(
+                subject='Password Recovery - Valuez',
+                sender='bearmeh00@gmail.com',
+                recipients=[email]
+            )
+            msg.body = f'''Hello {user_name},
+
+You have requested to reset your password for your Valuez account.
+
+Your recovery code is: {otp}
+
+This code will expire in 5 minutes.
+
+If you did not request this password reset, please ignore this email.
+
+Best regards,
+Valuez Team'''
+            mail.send(msg)
+            print(f"📧 Password recovery email sent successfully to {email}")
+            return True
+    except Exception as e:
+        print(f"❌ Failed to send password recovery email: {e}")
+        return False
+
+# Send password recovery email asynchronously (non-blocking)
+def send_password_recovery_email_async(email, otp, user_name):
+    """Send password recovery email in a background thread to avoid blocking the API response"""
+    thread = threading.Thread(target=send_password_recovery_email_sync, args=(email, otp, user_name))
+    thread.daemon = True  # Thread will die when main process exits
+    thread.start()
+    return True  # Return immediately, email will be sent in background
 
 # Request email verification
 @app.route('/api/auth/send-otp', methods=['POST'])
@@ -424,27 +535,72 @@ def send_otp():
     email = data['email']
     
     # Check if user already exists
-    if User.query.filter_by(email=email).first():
-        return jsonify({'error': 'User already exists with this email'}), 409
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        # If user is active, return error
+        if existing_user.is_active:
+            return jsonify({'error': 'User already exists with this email'}), 409
+        # If user is deactivated, allow them to proceed with signup (will reactivate)
     
     # Generate OTP
     otp = generate_otp()
     
-    # Store OTP with expiration (5 minutes)
-    email_verification_codes[email] = {
-        'otp': otp,
-        'expires_at': datetime.utcnow() + timedelta(minutes=5),
-        'attempts': 0
-    }
+    try:
+        # Delete any existing OTPs for this email (cleanup)
+        EmailVerificationCode.query.filter_by(email=email).delete()
+        db.session.commit()
+    except Exception as e:
+        # If table doesn't exist, create it
+        print(f"Table doesn't exist yet, creating tables: {e}")
+        db.session.rollback()
+        try:
+            db.create_all()
+            print("✅ Database tables created successfully")
+        except Exception as create_error:
+            print(f"❌ Failed to create tables: {create_error}")
+            return jsonify({'error': 'Database setup error. Please contact support.'}), 500
     
-    # Send OTP (mock)
-    if send_otp_email(email, otp):
-        return jsonify({
-            'message': 'OTP sent successfully',
-            'email': email
-        }), 200
-    else:
-        return jsonify({'error': 'Failed to send OTP'}), 500
+    try:
+        # Store OTP in database with expiration (5 minutes) - shared across all instances
+        verification_code = EmailVerificationCode(
+            email=email,
+            otp=otp,
+            expires_at=datetime.utcnow() + timedelta(minutes=5),
+            attempts=0,
+            verified=False
+        )
+        db.session.add(verification_code)
+        db.session.commit()
+    except Exception as e:
+        # If table still doesn't exist, create it and retry
+        print(f"Error storing OTP, attempting to create tables: {e}")
+        try:
+            db.create_all()
+            db.session.rollback()
+            # Retry after creating tables
+            verification_code = EmailVerificationCode(
+                email=email,
+                otp=otp,
+                expires_at=datetime.utcnow() + timedelta(minutes=5),
+                attempts=0,
+                verified=False
+            )
+            db.session.add(verification_code)
+            db.session.commit()
+            print("✅ OTP stored successfully after creating tables")
+        except Exception as retry_error:
+            db.session.rollback()
+            print(f"❌ Failed to store OTP even after creating tables: {retry_error}")
+            return jsonify({'error': 'Failed to store OTP. Please try again.'}), 500
+    
+    # Send OTP asynchronously (non-blocking) - returns immediately
+    send_otp_email_async(email, otp)
+    
+    # Return success immediately - OTP is stored in database and email is being sent in background
+    return jsonify({
+        'message': 'OTP sent successfully',
+        'email': email
+    }), 200
 
 # Verify OTP
 @app.route('/api/auth/verify-otp', methods=['POST'])
@@ -457,30 +613,50 @@ def verify_otp():
     email = data['email']
     otp = data['otp']
     
-    # Check if OTP exists and is valid
-    if email not in email_verification_codes:
+    try:
+        # Get OTP from database (shared across all instances)
+        verification_code = EmailVerificationCode.query.filter_by(email=email).order_by(EmailVerificationCode.created_at.desc()).first()
+    except Exception as e:
+        # If table doesn't exist, try to create it
+        print(f"Table doesn't exist, creating tables: {e}")
+        try:
+            db.create_all()
+            # Retry query after creating tables
+            verification_code = EmailVerificationCode.query.filter_by(email=email).order_by(EmailVerificationCode.created_at.desc()).first()
+        except Exception as create_error:
+            print(f"Failed to create tables: {create_error}")
+            return jsonify({'error': 'Database setup error. Please request a new OTP.'}), 500
+    
+    # Check if OTP exists
+    if not verification_code:
         return jsonify({'error': 'No OTP requested for this email'}), 400
     
-    verification_data = email_verification_codes[email]
-    
     # Check if OTP is expired
-    if datetime.utcnow() > verification_data['expires_at']:
-        del email_verification_codes[email]
+    if verification_code.is_expired():
+        db.session.delete(verification_code)
+        db.session.commit()
         return jsonify({'error': 'OTP has expired'}), 400
     
     # Check if too many attempts
-    if verification_data['attempts'] >= 3:
-        del email_verification_codes[email]
+    if verification_code.attempts >= 3:
+        db.session.delete(verification_code)
+        db.session.commit()
         return jsonify({'error': 'Too many failed attempts. Please request a new OTP'}), 400
     
+    # Check if already verified
+    if verification_code.verified:
+        return jsonify({'error': 'This OTP has already been used'}), 400
+    
     # Check if OTP matches
-    if verification_data['otp'] != otp:
-        verification_data['attempts'] += 1
+    if verification_code.otp != otp:
+        verification_code.attempts += 1
+        db.session.commit()
         return jsonify({'error': 'Invalid OTP'}), 400
     
     # OTP is valid - mark email as verified
-    verification_data['verified'] = True
-    verification_data['verified_at'] = datetime.utcnow()
+    verification_code.verified = True
+    verification_code.verified_at = datetime.utcnow()
+    db.session.commit()
     
     return jsonify({
         'message': 'Email verified successfully',
@@ -516,6 +692,28 @@ def get_properties():
             if agent:
                 agent_profile = AgentProfile.query.filter_by(user_id=agent.id).first()
             
+            # Get primary image for the property
+            primary_image = PropertyImage.query.filter_by(
+                property_id=prop.id, 
+                is_primary=True
+            ).first()
+            
+            # If no primary image, get the first image
+            if not primary_image:
+                primary_image = PropertyImage.query.filter_by(
+                    property_id=prop.id
+                ).first()
+            
+            # Get image URL - return relative path, frontend will construct full URL
+            image_url = None
+            if primary_image:
+                image_url = primary_image.image_url
+                # Ensure it starts with / for relative path
+                if image_url and not image_url.startswith('/') and not image_url.startswith('http'):
+                    image_url = '/' + image_url
+                # If it's already a full URL (http/https), keep it as is
+                # Otherwise, return as relative path for frontend to handle
+            
             property_data = {
                 'id': prop.id,
                 'title': prop.title,
@@ -534,7 +732,8 @@ def get_properties():
                 'created_at': prop.created_at.isoformat() if prop.created_at else None,
                 'agent_name': agent_name,
                 'agent_license': agent_profile.license_number if agent_profile else None,
-                'agent_company': agent_profile.company_name if agent_profile else 'Valuez Real Estate'
+                'agent_company': agent_profile.company_name if agent_profile else 'Valuez Real Estate',
+                'image': image_url  # Add primary image URL
             }
             property_list.append(property_data)
         
@@ -569,9 +768,13 @@ def filter_properties_by_amenities():
         if not amenity_types or len(amenity_types) == 0:
             # If no amenities selected, return all active property IDs
             all_properties = Property.query.filter_by(status='active').all()
+            # Also return API key status for frontend
+            GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
+            api_key_configured = bool(GOOGLE_MAPS_API_KEY and GOOGLE_MAPS_API_KEY.strip())
             return jsonify({
                 'property_ids': [prop.id for prop in all_properties],
-                'count': len(all_properties)
+                'count': len(all_properties),
+                'api_key_configured': api_key_configured
             }), 200
         
         # Map amenity types to Google Places API types
@@ -609,12 +812,14 @@ def filter_properties_by_amenities():
         # For now, return properties that have latitude/longitude (real implementation would use Places API)
         matching_property_ids = set()
         
+        # Check API key at function level to ensure it's always available
+        GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
+        api_key_configured = bool(GOOGLE_MAPS_API_KEY and GOOGLE_MAPS_API_KEY.strip())
+        
         try:
             import requests
-            GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
-            api_key_configured = bool(GOOGLE_MAPS_API_KEY)  # Set based on whether key exists
             
-            if GOOGLE_MAPS_API_KEY:
+            if GOOGLE_MAPS_API_KEY and GOOGLE_MAPS_API_KEY.strip():
                 # Use Google Places API to find nearby amenities
                 for prop in properties:
                     lat = float(prop.latitude)
@@ -657,13 +862,13 @@ def filter_properties_by_amenities():
         except ImportError:
             # If requests library is not available, return all properties with coordinates (for testing)
             matching_property_ids = {prop.id for prop in properties}
-            api_key_configured = False
+            # api_key_configured is already set at function level, no need to change it
             print("Warning: requests library not available. Returning all properties with coordinates (for testing). Please install requests: pip install requests")
         
         return jsonify({
             'property_ids': list(matching_property_ids),
             'count': len(matching_property_ids),
-            'api_key_configured': api_key_configured if 'api_key_configured' in locals() else bool(os.getenv('GOOGLE_MAPS_API_KEY'))
+            'api_key_configured': api_key_configured
         }), 200
         
     except Exception as e:
@@ -1155,42 +1360,24 @@ def forgot_password():
     # Generate OTP for password recovery
     otp = generate_otp()
     
-    # Store OTP with expiration (5 minutes)
-    password_reset_codes[email] = {
-        'otp': otp,
-        'expires_at': datetime.utcnow() + timedelta(minutes=5),
-        'attempts': 0
-    }
+    # Delete any existing reset codes for this email (cleanup)
+    PasswordResetCode.query.filter_by(email=email).delete()
     
-    try:
-        # Send recovery email
-        msg = Message(
-            subject='Password Recovery - Valuez',
-            sender='bearmeh00@gmail.com',
-            recipients=[email]
-        )
-        msg.body = f'''Hello {user.full_name},
-
-You have requested to reset your password for your Valuez account.
-
-Your recovery code is: {otp}
-
-This code will expire in 5 minutes.
-
-If you did not request this password reset, please ignore this email.
-
-Best regards,
-Valuez Team'''
-        
-        mail.send(msg)
-        
-        return jsonify({'message': 'Recovery code sent successfully'}), 200
-        
-    except Exception as e:
-        # Remove the stored OTP if email fails
-        if email in password_reset_codes:
-            del password_reset_codes[email]
-        return jsonify({'error': 'Failed to send recovery email'}), 500
+    # Store OTP in database with expiration (5 minutes) - shared across all instances
+    reset_code = PasswordResetCode(
+        email=email,
+        otp=otp,
+        expires_at=datetime.utcnow() + timedelta(minutes=5),
+        attempts=0
+    )
+    db.session.add(reset_code)
+    db.session.commit()
+    
+    # Send recovery email asynchronously (non-blocking) - returns immediately
+    send_password_recovery_email_async(email, otp, user.full_name)
+    
+    # Return success immediately - OTP is stored in database and email is being sent in background
+    return jsonify({'message': 'Recovery code sent successfully'}), 200
 
 # Get user profile
 @app.route('/api/auth/profile', methods=['GET'])
@@ -1248,7 +1435,8 @@ def get_agent_profile():
         'specializations': agent_profile.specializations,
         'bio': agent_profile.bio,
         'contact_preferences': agent_profile.contact_preferences,
-        'license_picture_url': agent_profile.license_picture_url if hasattr(agent_profile, 'license_picture_url') else None
+        'license_picture_url': agent_profile.license_picture_url if hasattr(agent_profile, 'license_picture_url') else None,
+        'registration_start_date': agent_profile.registration_start_date.isoformat() if agent_profile.registration_start_date else None
     }), 200
 
 # Upload agent license picture
@@ -2096,6 +2284,179 @@ def format_time_ago(timestamp):
     else:
         return 'Just now'
 
+# Function to validate agent details against CSV file
+def validate_agent_against_csv(license_number, company_name, salesperson_name=None, registration_start_date=None):
+    """
+    Validate agent details against agent_details.csv
+    Checks: Registration No, Estate Agent Name, Salesperson Name, Registration Start Date
+    Returns: (is_valid, matched_record, validation_details)
+    """
+    csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'agent_details.csv')
+    
+    # If CSV file doesn't exist, return pending status
+    if not os.path.exists(csv_path):
+        print(f"Warning: agent_details.csv not found at {csv_path}")
+        return ('pending', None, {})
+    
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            
+            # Normalize inputs for comparison
+            normalized_license = license_number.strip().upper() if license_number else ''
+            normalized_company = company_name.strip() if company_name else ''
+            normalized_salesperson = salesperson_name.strip() if salesperson_name else ''
+            
+            for row in reader:
+                # Normalize CSV values for comparison
+                csv_license = row.get('Registration No', '').strip().upper()
+                csv_company = row.get('Estate Agent Name', '').strip()
+                csv_salesperson = row.get('Salesperson Name', '').strip()
+                csv_reg_start = row.get('Registration Start Date', '').strip()
+                
+                # Check if license number matches (primary key for matching)
+                if normalized_license and csv_license == normalized_license:
+                    validation_details = {
+                        'license_match': True,
+                        'company_match': False,
+                        'salesperson_match': False,
+                        'registration_date_match': False
+                    }
+                    
+                    # Check company name
+                    if normalized_company and csv_company:
+                        validation_details['company_match'] = (csv_company.lower() == normalized_company.lower())
+                    elif not normalized_company and not csv_company:
+                        validation_details['company_match'] = True  # Both empty, consider match
+                    else:
+                        # One is empty, the other isn't - doesn't match
+                        validation_details['company_match'] = False
+                    
+                    # Check salesperson name
+                    if normalized_salesperson and csv_salesperson:
+                        validation_details['salesperson_match'] = (csv_salesperson.lower() == normalized_salesperson.lower())
+                    elif not normalized_salesperson and not csv_salesperson:
+                        validation_details['salesperson_match'] = True  # Both empty, consider match
+                    else:
+                        # One is empty, the other isn't - doesn't match
+                        validation_details['salesperson_match'] = False
+                    
+                    # Check registration start date
+                    if registration_start_date and csv_reg_start:
+                        try:
+                            # Parse dates for comparison - normalize both to date objects
+                            from datetime import datetime
+                            
+                            # Parse agent date - handle different input types
+                            from datetime import date as date_type
+                            
+                            if isinstance(registration_start_date, date_type):
+                                # It's already a date object (most common from database)
+                                agent_date = registration_start_date
+                            elif isinstance(registration_start_date, datetime):
+                                # It's a datetime object, extract the date part
+                                agent_date = registration_start_date.date()
+                            elif isinstance(registration_start_date, str):
+                                # It's a string, try to parse it
+                                try:
+                                    # Try ISO format first (YYYY-MM-DD)
+                                    agent_date = datetime.strptime(registration_start_date.split('T')[0], '%Y-%m-%d').date()
+                                except ValueError:
+                                    try:
+                                        # Try other formats
+                                        agent_date = datetime.strptime(registration_start_date, '%Y/%m/%d').date()
+                                    except ValueError:
+                                        # Try M/D/YYYY format (12/1/2021)
+                                        try:
+                                            agent_date = datetime.strptime(registration_start_date, '%m/%d/%Y').date()
+                                        except ValueError:
+                                            # Last resort: try to extract date from any format
+                                            agent_date = datetime.strptime(registration_start_date.split()[0].split('T')[0], '%Y-%m-%d').date()
+                            else:
+                                # Unknown type, try to convert to string and parse
+                                date_str = str(registration_start_date).split('T')[0].split()[0]
+                                agent_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                            
+                            # Parse CSV date (should be YYYY-MM-DD format)
+                            csv_date = datetime.strptime(csv_reg_start.strip(), '%Y-%m-%d').date()
+                            
+                            # Compare the actual date objects
+                            validation_details['registration_date_match'] = (agent_date == csv_date)
+                            
+                            # Debug logging
+                            print(f"Date comparison - Agent date: {agent_date} (type: {type(agent_date)}), CSV date: {csv_date}, Match: {validation_details['registration_date_match']}")
+                            if not validation_details['registration_date_match']:
+                                print(f"Date mismatch - Agent: {agent_date} ({type(agent_date)}), CSV: {csv_date}, Original agent date: {registration_start_date} ({type(registration_start_date)})")
+                        except Exception as e:
+                            print(f"Error comparing dates: {e}")
+                            print(f"Agent date: {registration_start_date} (type: {type(registration_start_date)})")
+                            print(f"CSV date: {csv_reg_start}")
+                            validation_details['registration_date_match'] = False
+                    elif not registration_start_date and not csv_reg_start:
+                        validation_details['registration_date_match'] = True  # Both empty, consider match
+                    else:
+                        # One is empty, the other isn't - doesn't match
+                        validation_details['registration_date_match'] = False
+                    
+                    # Determine overall verification status
+                    # All provided fields must match for verification
+                    all_match = (
+                        validation_details['company_match'] and
+                        validation_details['salesperson_match'] and
+                        validation_details['registration_date_match']
+                    )
+                    
+                    if all_match:
+                        return ('verified', row, validation_details)
+                    else:
+                        return ('unverified', row, validation_details)
+            
+            # No match found for license number
+            return ('unverified', None, {'license_match': False})
+            
+    except Exception as e:
+        print(f"Error reading agent_details.csv: {e}")
+        import traceback
+        traceback.print_exc()
+        return ('pending', None, {})
+
+# Function to automatically check and update agent verification status
+def check_and_update_agent_verification(agent_profile):
+    """
+    Automatically validate agent profile against CSV and update verification status.
+    This is called when admin views user management pages.
+    Checks all matching fields: Registration No, Estate Agent Name, Salesperson Name, Registration Start Date
+    """
+    if not agent_profile:
+        return
+    
+    # Only check if agent has license number (required for matching)
+    if not agent_profile.license_number:
+        return
+    
+    # Get user's full name (Salesperson Name) if available
+    salesperson_name = None
+    if agent_profile.user:
+        salesperson_name = agent_profile.user.full_name
+    
+    # Validate against CSV - check all matching fields
+    verification_status, matched_record, validation_details = validate_agent_against_csv(
+        agent_profile.license_number,
+        agent_profile.company_name,
+        salesperson_name,
+        agent_profile.registration_start_date
+    )
+    
+    # Update verification status
+    agent_profile.verification_status = verification_status
+    agent_profile.verification_checked_at = datetime.utcnow()
+    
+    try:
+        db.session.commit()
+    except Exception as e:
+        print(f"Error updating agent verification status: {e}")
+        db.session.rollback()
+
 # Update user profile
 @app.route('/api/auth/profile', methods=['PUT'])
 @require_auth
@@ -2124,16 +2485,47 @@ def update_profile():
                 return jsonify({'error': 'Agent profile not found'}), 404
             
             agent_info = data['agent_info']
+            license_updated = False
+            company_updated = False
+            
             if 'cea_number' in agent_info:
                 agent_profile.license_number = agent_info['cea_number']
+                license_updated = True
             if 'company_name' in agent_info:
                 agent_profile.company_name = agent_info['company_name']
+                company_updated = True
             if 'company_phone' in agent_info:
                 agent_profile.company_phone = agent_info['company_phone']
             if 'company_email' in agent_info:
                 agent_profile.company_email = agent_info['company_email']
             if 'specializations' in agent_info:
                 agent_profile.specializations = agent_info['specializations']
+            if 'registration_start_date' in agent_info:
+                from datetime import datetime
+                try:
+                    # Parse date string (expected format: YYYY-MM-DD)
+                    date_str = agent_info['registration_start_date']
+                    if date_str:
+                        agent_profile.registration_start_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    else:
+                        agent_profile.registration_start_date = None
+                except (ValueError, TypeError) as e:
+                    print(f"Error parsing registration_start_date: {e}")
+                    # Don't update if date is invalid
+            
+            # Validate against CSV if license, company, name, or registration date was updated
+            if license_updated or company_updated or 'registration_start_date' in agent_info or 'full_name' in data:
+                # Get user's full name (Salesperson Name)
+                salesperson_name = user.full_name
+                
+                verification_status, matched_record, validation_details = validate_agent_against_csv(
+                    agent_profile.license_number,
+                    agent_profile.company_name,
+                    salesperson_name,
+                    agent_profile.registration_start_date
+                )
+                agent_profile.verification_status = verification_status
+                agent_profile.verification_checked_at = datetime.utcnow()
         
         db.session.commit()
         
@@ -2157,7 +2549,9 @@ def update_profile():
                 'company_phone': agent_profile.company_phone if hasattr(agent_profile, 'company_phone') else None,
                 'company_email': agent_profile.company_email if hasattr(agent_profile, 'company_email') else None,
                 'specializations': agent_profile.specializations if agent_profile.specializations else [],
-                'license_picture_url': agent_profile.license_picture_url if hasattr(agent_profile, 'license_picture_url') else None
+                'license_picture_url': agent_profile.license_picture_url if hasattr(agent_profile, 'license_picture_url') else None,
+                'verification_status': agent_profile.verification_status if hasattr(agent_profile, 'verification_status') else 'pending',
+                'verification_checked_at': agent_profile.verification_checked_at.isoformat() if hasattr(agent_profile, 'verification_checked_at') and agent_profile.verification_checked_at else None
             }
         
         return jsonify(response_data), 200
@@ -2688,25 +3082,34 @@ def reset_password():
     otp = data['otp']
     new_password = data['new_password']
     
-    # Check if OTP exists and is valid
-    if email not in password_reset_codes:
+    # Get reset code from database (shared across all instances)
+    reset_code = PasswordResetCode.query.filter_by(email=email).order_by(PasswordResetCode.created_at.desc()).first()
+    
+    # Check if OTP exists
+    if not reset_code:
         return jsonify({'error': 'Invalid or expired recovery code'}), 400
     
-    reset_data = password_reset_codes[email]
-    
     # Check if OTP has expired
-    if datetime.utcnow() > reset_data['expires_at']:
-        del password_reset_codes[email]
+    if reset_code.is_expired():
+        db.session.delete(reset_code)
+        db.session.commit()
         return jsonify({'error': 'Recovery code has expired'}), 400
     
+    # Check if too many attempts
+    if reset_code.attempts >= 3:
+        db.session.delete(reset_code)
+        db.session.commit()
+        return jsonify({'error': 'Too many failed attempts. Please request a new recovery code'}), 400
+    
     # Check if OTP matches
-    if reset_data['otp'] != otp:
-        reset_data['attempts'] += 1
+    if reset_code.otp != otp:
+        reset_code.attempts += 1
+        db.session.commit()
         
-        # Remove OTP if too many attempts
-        if reset_data['attempts'] >= 3:
-            del password_reset_codes[email]
-            return jsonify({'error': 'Too many failed attempts. Please request a new recovery code'}), 400
+        # Remove OTP if too many attempts after this increment
+        if reset_code.attempts >= 3:
+            db.session.delete(reset_code)
+            db.session.commit()
         
         return jsonify({'error': 'Invalid recovery code'}), 400
     
@@ -2717,15 +3120,16 @@ def reset_password():
     # OTP is valid, reset password
     user = User.query.filter_by(email=email).first()
     if not user:
-        del password_reset_codes[email]
+        db.session.delete(reset_code)
+        db.session.commit()
         return jsonify({'error': 'User not found'}), 404
     
     try:
         user.set_password(new_password)
-        db.session.commit()
         
         # Remove the used OTP
-        del password_reset_codes[email]
+        db.session.delete(reset_code)
+        db.session.commit()
         
         return jsonify({'message': 'Password reset successfully'}), 200
         
@@ -2830,7 +3234,7 @@ def get_all_users():
         
         user_list = []
         for user in users.items:
-            user_list.append({
+            user_data = {
                 'id': user.id,
                 'full_name': user.full_name,
                 'email': user.email,
@@ -2840,7 +3244,21 @@ def get_all_users():
                 'last_login': user.last_login.isoformat() if user.last_login else None,
                 'is_active': user.is_active,
                 'referral_code': user.referral_code
-            })
+            }
+            
+            # If user is an agent, automatically check verification status
+            if user.user_type == 'agent':
+                agent_profile = AgentProfile.query.filter_by(user_id=user.id).first()
+                if agent_profile:
+                    # Automatically validate against CSV when admin views users
+                    check_and_update_agent_verification(agent_profile)
+                    # Refresh from database to get updated status
+                    db.session.refresh(agent_profile)
+                    user_data['agent_verification_status'] = agent_profile.verification_status if hasattr(agent_profile, 'verification_status') else 'pending'
+                else:
+                    user_data['agent_verification_status'] = 'pending'
+            
+            user_list.append(user_data)
         
         return jsonify({
             'users': user_list,
@@ -2926,6 +3344,61 @@ def get_user_by_id(user_id):
             'referral_code': user.referral_code,
             'activities': activities
         }
+        
+        # If user is an agent, include agent profile details
+        if user.user_type == 'agent':
+            agent_profile = AgentProfile.query.filter_by(user_id=user_id).first()
+            if agent_profile:
+                # Automatically validate against CSV when admin views user details
+                check_and_update_agent_verification(agent_profile)
+                # Refresh from database to get updated status
+                db.session.refresh(agent_profile)
+                
+                # Get validation details for frontend to show which fields don't match
+                salesperson_name = user.full_name if user else None
+                
+                # Debug: Check what format the date is in
+                reg_date = agent_profile.registration_start_date
+                if reg_date:
+                    print(f"DEBUG: registration_start_date type: {type(reg_date)}, value: {reg_date}")
+                    if hasattr(reg_date, 'isoformat'):
+                        print(f"DEBUG: ISO format: {reg_date.isoformat()}")
+                
+                _, _, validation_details = validate_agent_against_csv(
+                    agent_profile.license_number,
+                    agent_profile.company_name,
+                    salesperson_name,
+                    agent_profile.registration_start_date
+                )
+                
+                # Ensure validation_details always has all fields (default to False if not present)
+                if not validation_details:
+                    validation_details = {}
+                validation_details.setdefault('license_match', False)
+                validation_details.setdefault('company_match', False)
+                validation_details.setdefault('salesperson_match', False)
+                validation_details.setdefault('registration_date_match', False)
+                
+                # Debug: print validation details
+                print(f"Validation details for agent {user_id}: {validation_details}")
+                
+                user_data['agent_profile'] = {
+                    'license_number': agent_profile.license_number,
+                    'company_name': agent_profile.company_name,
+                    'company_phone': agent_profile.company_phone if hasattr(agent_profile, 'company_phone') else None,
+                    'company_email': agent_profile.company_email if hasattr(agent_profile, 'company_email') else None,
+                    'years_experience': agent_profile.years_experience,
+                    'specializations': agent_profile.specializations,
+                    'bio': agent_profile.bio,
+                    'contact_preferences': agent_profile.contact_preferences,
+                    'license_picture_url': agent_profile.license_picture_url if hasattr(agent_profile, 'license_picture_url') else None,
+                    'registration_start_date': agent_profile.registration_start_date.isoformat() if agent_profile.registration_start_date else None,
+                    'verification_status': agent_profile.verification_status if hasattr(agent_profile, 'verification_status') else 'pending',
+                    'verification_checked_at': agent_profile.verification_checked_at.isoformat() if hasattr(agent_profile, 'verification_checked_at') and agent_profile.verification_checked_at else None,
+                    'validation_details': validation_details  # Include which fields don't match
+                }
+            else:
+                user_data['agent_profile'] = None
         
         return jsonify(user_data), 200
         
@@ -4351,12 +4824,33 @@ def test_db():
         return jsonify({'error': f'Database connection failed: {str(e)}'}), 500
 
 # Create database tables
-@app.route('/api/init-db')
+@app.route('/api/init-db', methods=['GET', 'POST'])
 def init_db():
+    """Create all database tables if they don't exist"""
     try:
-        db.create_all()
-        return jsonify({'message': 'Database tables created successfully'}), 200
+        with app.app_context():
+            db.create_all()
+            # Check if new tables exist
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            
+            result = {
+                'message': 'Database tables created successfully',
+                'tables': tables,
+                'new_tables': []
+            }
+            
+            # Check for new OTP tables
+            if 'email_verification_codes' in tables:
+                result['new_tables'].append('email_verification_codes')
+            if 'password_reset_codes' in tables:
+                result['new_tables'].append('password_reset_codes')
+            
+            return jsonify(result), 200
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'Failed to create tables: {str(e)}'}), 500
 
 # Bookmark endpoints
@@ -7221,7 +7715,7 @@ def create_team_member():
             name=data['name'],
             role=data['role'],
             description=data.get('description', ''),
-            image_url=data.get('image_url', ''),  # This will be a file path, not base64
+            image_url=data.get('image_url', ''),  # Can be a file path or URL
             social_links=data.get('social_links', {}),
             display_order=next_order
         )
@@ -7415,25 +7909,6 @@ def serve_team_member_profile_picture(filename):
     except Exception as e:
         print(f"Error serving file: {e}")
         return jsonify({'error': 'Error serving file'}), 500
-
-# Database migration endpoint
-@app.route('/api/migrate/update-image-url-column', methods=['POST'])
-def migrate_image_url_column():
-    """Update team_members.image_url column to TEXT to support base64 data URLs"""
-    try:
-        # Execute the ALTER TABLE command
-        db.session.execute(text("ALTER TABLE team_members ALTER COLUMN image_url TYPE TEXT;"))
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Successfully updated team_members.image_url to TEXT!'
-        }), 200
-        
-    except Exception as e:
-        print(f"Error updating image_url column: {e}")
-        db.session.rollback()
-        return jsonify({'error': f'Failed to update image_url column: {str(e)}'}), 500
 
 # Contact Information API Endpoints
 

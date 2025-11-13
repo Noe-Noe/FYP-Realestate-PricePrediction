@@ -186,8 +186,19 @@ const FirstTimer = () => {
     }
   };
 
-  const handleContinueToDashboard = () => {
-    navigate('/dashboard');
+  const handleContinueToDashboard = async () => {
+    try {
+      // Mark onboarding as completed in backend
+      await onboardingAPI.completeUser();
+      console.log('✅ Onboarding marked as completed');
+      
+      // Navigate to main dashboard
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+      // Still navigate even if API call fails
+      navigate('/dashboard');
+    }
   };
 
   const handleViewProperty = (propertyId) => {

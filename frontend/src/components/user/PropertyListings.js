@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
-import { propertiesAPI } from '../../services/api';
+import { propertiesAPI, BACKEND_ORIGIN } from '../../services/api';
 import './PropertyListings.css';
 
 const PropertyListings = () => {
@@ -113,6 +113,22 @@ const PropertyListings = () => {
       'Business Parks': 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&h=300&fit=crop'
     };
     return images[propertyType] || images['Office'];
+  };
+
+  // Construct full image URL from relative path
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    // If it's a relative path, construct full URL using backend origin
+    if (imagePath.startsWith('/')) {
+      return BACKEND_ORIGIN ? `${BACKEND_ORIGIN}${imagePath}` : imagePath;
+    }
+    // If it doesn't start with /, add it
+    const path = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+    return BACKEND_ORIGIN ? `${BACKEND_ORIGIN}${path}` : path;
   };
 
   // Get unique cities for location filter
@@ -244,7 +260,15 @@ const PropertyListings = () => {
         return false;
       }
       // Only show properties that are in the nearbyProperties list
-      if (!nearbyProperties.includes(property.id)) {
+      // Convert both to numbers for consistent comparison
+      if (!property.id) {
+        console.warn('⚠️ Property missing ID:', property);
+        return false;
+      }
+      const propertyId = Number(property.id);
+      const nearbyIds = nearbyProperties.map(id => Number(id));
+      const isIncluded = nearbyIds.includes(propertyId);
+      if (!isIncluded) {
         return false;
       }
     }
@@ -291,19 +315,28 @@ const PropertyListings = () => {
       console.log('🔍 Fetching properties near amenities:', amenityTypes, 'with radius:', amenityRadius);
       const response = await propertiesAPI.filterByAmenities(amenityTypes, amenityRadius);
       console.log('✅ Backend response:', response);
+      console.log('✅ Backend property_ids:', response?.property_ids);
+      console.log('✅ Backend property_ids type:', typeof response?.property_ids?.[0]);
       
       if (response && response.property_ids) {
-        setNearbyProperties(response.property_ids);
-        setApiKeyConfigured(response.api_key_configured !== false); // Default to true if not specified
-        console.log(`✅ Found ${response.property_ids.length} properties near selected amenities`);
-        console.log(`🔑 API Key configured: ${response.api_key_configured !== false}`);
+        // Ensure all IDs are numbers for consistent comparison
+        const numericIds = response.property_ids.map(id => Number(id));
+        setNearbyProperties(numericIds);
+        // Set based on explicit api_key_configured value from backend
+        const isConfigured = response.api_key_configured === true || response.api_key_configured === undefined;
+        setApiKeyConfigured(isConfigured);
+        console.log(`✅ Found ${numericIds.length} properties near selected amenities`);
+        console.log(`✅ Property IDs (as numbers):`, numericIds);
+        console.log(`🔑 API Key configured: ${isConfigured} (backend returned: ${response.api_key_configured})`);
       } else {
         setNearbyProperties([]);
-        setApiKeyConfigured(false);
+        // Don't set apiKeyConfigured to false if response doesn't have property_ids
+        // It might be a different issue (no properties found, etc.)
         console.log('⚠️ No property_ids in response, setting to empty array');
       }
     } catch (error) {
       console.error('❌ Error fetching properties near amenities:', error);
+      console.error('❌ Error details:', error.message);
       setNearbyProperties([]);
     } finally {
       setIsFilteringByAmenities(false);
@@ -579,9 +612,13 @@ const PropertyListings = () => {
                 >
                   <div className="property-image-container">
                     <img 
-                      src={getDefaultImage(property.property_type)} 
+                      src={property.image ? getImageUrl(property.image) : getDefaultImage(property.property_type)} 
                       alt={property.title}
                       className="property-image"
+                      onError={(e) => {
+                        // Fallback to default image if property image fails to load
+                        e.target.src = getDefaultImage(property.property_type);
+                      }}
                     />
                     <div className={`transaction-type-badge ${property.price_type === 'sale' ? 'buy' : 'rental'}`}>
                       {property.price_type === 'sale' ? 'For Sale' : 'For Rent'}

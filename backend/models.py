@@ -81,12 +81,18 @@ class AgentProfile(db.Model):
     specializations = db.Column(db.JSON)  # Array of specializations (commercial, industrial, residential)
     bio = db.Column(db.Text)
     contact_preferences = db.Column(db.JSON)  # Array of contact preferences
+    registration_start_date = db.Column(db.Date)  # Date when agent started their registration
     
     # Relationships
     user = db.relationship('User', backref='agent_profile')
     
     # Track first-time agent onboarding status
     first_time_agent = db.Column(db.Boolean, default=True)
+    
+    # Agent information verification status against CSV
+    # 'verified' = matches CSV, 'unverified' = doesn't match CSV, 'pending' = not checked yet
+    verification_status = db.Column(db.String(20), default='pending')
+    verification_checked_at = db.Column(db.DateTime)  # When verification was last checked
 
 class Region(db.Model):
     __tablename__ = 'regions'
@@ -450,3 +456,39 @@ class Review(db.Model):
     
     # Relationships
     user = db.relationship('User', backref='reviews')
+
+class EmailVerificationCode(db.Model):
+    """Store OTP codes for email verification - shared across all server instances"""
+    __tablename__ = 'email_verification_codes'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    otp = db.Column(db.String(6), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    attempts = db.Column(db.Integer, default=0)
+    verified = db.Column(db.Boolean, default=False)
+    verified_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def is_expired(self):
+        return datetime.utcnow() > self.expires_at
+    
+    def is_valid(self):
+        return not self.is_expired() and self.attempts < 3 and not self.verified
+
+class PasswordResetCode(db.Model):
+    """Store OTP codes for password reset - shared across all server instances"""
+    __tablename__ = 'password_reset_codes'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    otp = db.Column(db.String(6), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    attempts = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def is_expired(self):
+        return datetime.utcnow() > self.expires_at
+    
+    def is_valid(self):
+        return not self.is_expired() and self.attempts < 3

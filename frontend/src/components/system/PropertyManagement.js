@@ -27,6 +27,8 @@ const PropertyManagement = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [propertyImages, setPropertyImages] = useState([]);
 
   // Fetch real data from backend
   useEffect(() => {
@@ -82,6 +84,16 @@ const PropertyManagement = () => {
       console.log('Property details fetched:', propertyDetails);
       console.log('Amenities:', propertyDetails.amenities);
       setSelectedProperty(propertyDetails);
+      
+      // Extract and set images
+      if (propertyDetails.images && propertyDetails.images.length > 0) {
+        const imageUrls = propertyDetails.images.map(img => img.url || img.image_url);
+        setPropertyImages(imageUrls);
+      } else {
+        setPropertyImages([]);
+      }
+      
+      setCurrentImageIndex(0); // Reset to first image
       setShowDetailsModal(true);
       setError(null);
     } catch (error) {
@@ -91,6 +103,22 @@ const PropertyManagement = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const nextImage = () => {
+    if (propertyImages.length > 0) {
+      setCurrentImageIndex((prev) => (prev + 1) % propertyImages.length);
+    }
+  };
+
+  const previousImage = () => {
+    if (propertyImages.length > 0) {
+      setCurrentImageIndex((prev) => (prev - 1 + propertyImages.length) % propertyImages.length);
+    }
+  };
+
+  const selectImage = (index) => {
+    setCurrentImageIndex(index);
   };
 
   const handleDelete = async (propertyId) => {
@@ -417,16 +445,60 @@ const PropertyManagement = () => {
             
             <div className="property-details-modal-content">
               {/* Property Images */}
-              {selectedProperty.images && selectedProperty.images.length > 0 && (
+              {propertyImages.length > 0 && (
                 <div className="property-details-images">
-                  <img
-                    src={selectedProperty.images[0].url || selectedProperty.images[0].image_url}
-                    alt={selectedProperty.title}
-                    className="property-details-main-image"
-                  />
-                  {selectedProperty.images.length > 1 && (
-                    <div className="property-details-image-count">
-                      +{selectedProperty.images.length - 1} more images
+                  <div className="property-details-image-container">
+                    <img
+                      src={propertyImages[currentImageIndex]}
+                      alt={`${selectedProperty.title} - Image ${currentImageIndex + 1}`}
+                      className="property-details-main-image"
+                    />
+                    
+                    {/* Navigation Arrows */}
+                    {propertyImages.length > 1 && (
+                      <>
+                        <button 
+                          className="property-details-carousel-btn property-details-carousel-prev"
+                          onClick={previousImage}
+                          aria-label="Previous image"
+                        >
+                          ‹
+                        </button>
+                        <button 
+                          className="property-details-carousel-btn property-details-carousel-next"
+                          onClick={nextImage}
+                          aria-label="Next image"
+                        >
+                          ›
+                        </button>
+                      </>
+                    )}
+                    
+                    {/* Image Counter */}
+                    {propertyImages.length > 1 && (
+                      <div className="property-details-image-counter">
+                        {currentImageIndex + 1} / {propertyImages.length}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Thumbnail Navigation */}
+                  {propertyImages.length > 1 && (
+                    <div className="property-details-thumbnails">
+                      {propertyImages.map((image, index) => (
+                        <button
+                          key={index}
+                          className={`property-details-thumbnail ${index === currentImageIndex ? 'property-details-thumbnail-active' : ''}`}
+                          onClick={() => selectImage(index)}
+                          aria-label={`Go to image ${index + 1}`}
+                        >
+                          <img 
+                            src={image} 
+                            alt={`Thumbnail ${index + 1}`}
+                            className="property-details-thumbnail-image"
+                          />
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>

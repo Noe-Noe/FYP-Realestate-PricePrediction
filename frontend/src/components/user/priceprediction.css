@@ -216,6 +216,7 @@
   padding-bottom: 1rem;
   border-bottom: 2px solid #e2e8f0;
   position: relative;
+  gap: 0.75rem;
 }
 
 .price-prediction-sidebar-header::after {
@@ -238,6 +239,8 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  flex: 1;
+  min-width: 0;
 }
 
 .price-prediction-clear-searches-btn {
@@ -374,7 +377,11 @@
   border-radius: 6px;
   display: inline-block;
   width: fit-content;
+  max-width: 100%;
   border-left: 3px solid #3b82f6;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .price-prediction-search-address {
@@ -384,6 +391,9 @@
   margin: 0;
   font-weight: 500;
   padding: 0.25rem 0;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .price-prediction-search-details-row {
@@ -486,6 +496,14 @@
     width: 200px;
     padding: 1rem;
   }
+  
+  .price-prediction-address-search-container {
+    flex-direction: column;
+  }
+  
+  .price-prediction-address-search-btn {
+    align-self: flex-start;
+  }
 }
 
 @media (max-width: 768px) {
@@ -498,29 +516,348 @@
     min-height: auto;
   }
   
+  .price-prediction-map-snippet {
+    padding: 0.875rem;
+  }
+  
+  .price-prediction-map-container {
+    height: 280px;
+  }
+  
+  .price-prediction-map-instructions {
+    padding: 0.875rem;
+    font-size: 0.8125rem;
+  }
+  
   .price-prediction-recent-searches-sidebar {
     width: 100%;
-    padding: 1rem;
+    padding: 1.5rem 1rem;
     min-height: auto;
+    border-left: none;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+  }
+  
+  .price-prediction-sidebar-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.875rem;
+    flex-wrap: wrap;
+  }
+  
+  .price-prediction-sidebar-title {
+    font-size: 1.125rem;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  
+  .price-prediction-clear-searches-btn {
+    min-width: 2.25rem;
+    height: 2.25rem;
+    font-size: 0.9375rem;
+  }
+  
+  .price-prediction-recent-searches-list {
+    gap: 1rem;
+  }
+  
+  .price-prediction-recent-search-item {
+    padding: 0.875rem;
+    margin-bottom: 0.625rem;
+  }
+  
+  .price-prediction-search-icon {
+    min-width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1.125rem;
+    padding: 0.4375rem;
+  }
+  
+  .price-prediction-search-property-type {
+    font-size: 0.8125rem;
+    padding: 0.25rem 0.625rem;
+    max-width: 100%;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .price-prediction-search-address {
+    font-size: 0.75rem;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .price-prediction-search-details-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .price-prediction-search-detail {
+    width: 100%;
+    flex-wrap: wrap;
+    font-size: 0.6875rem;
+    padding: 0.3125rem 0.625rem;
+  }
+  
+  .price-prediction-delete-search-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0.4375rem;
+    font-size: 0.8125rem;
   }
   
   .price-prediction-form-row {
     grid-template-columns: 1fr;
   }
   
-  .price-prediction-search-details-row {
+  .price-prediction-address-search-container {
     flex-direction: column;
-    gap: 0.25rem;
+  }
+  
+  .price-prediction-address-search-btn {
+    width: 100%;
+    align-self: stretch;
+  }
+  
+  .price-prediction-no-searches {
+    padding: 2rem 1rem;
+  }
+  
+  .price-prediction-no-searches-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .price-prediction-no-searches p {
+    font-size: 0.9375rem;
+  }
+  
+  .price-prediction-no-searches small {
+    font-size: 0.75rem;
   }
 }
 
 @media (max-width: 480px) {
+  .price-prediction-main-content {
+    padding: 0.875rem;
+  }
+  
+  .price-prediction-search-section {
+    max-width: 100%;
+  }
+  
   .price-prediction-search-form {
     gap: 1rem;
   }
   
+  .price-prediction-form-group label {
+    font-size: 0.8125rem;
+  }
+  
+  .price-prediction-form-group input,
+  .price-prediction-form-group select {
+    padding: 0.625rem;
+    font-size: 0.8125rem;
+  }
+  
+  .price-prediction-address-search-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .price-prediction-address-search-btn {
+    width: 100%;
+    padding: 0.625rem;
+  }
+  
   .price-prediction-search-btn {
     width: 100%;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9375rem;
+  }
+  
+  .price-prediction-map-snippet {
+    padding: 0.75rem;
+  }
+  
+  .price-prediction-map-container {
+    height: 250px;
+    margin-bottom: 0.75rem;
+  }
+  
+  .price-prediction-map-instructions {
+    padding: 0.75rem;
+    font-size: 0.8125rem;
+  }
+  
+  .price-prediction-map-instructions p {
+    margin: 0.2rem 0;
+    line-height: 1.35;
+  }
+  
+  .price-prediction-map-instructions small {
+    font-size: 0.6875rem;
+  }
+  
+  .price-prediction-recent-searches-sidebar {
+    padding: 1.25rem 0.875rem;
+  }
+  
+  .price-prediction-sidebar-header {
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+  
+  .price-prediction-sidebar-title {
+    font-size: 1rem;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  
+  .price-prediction-clear-searches-btn {
+    min-width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+    padding: 0.375rem;
+  }
+  
+  .price-prediction-recent-searches-list {
+    gap: 0.875rem;
+  }
+  
+  .price-prediction-recent-search-item {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    gap: 0.625rem;
+  }
+  
+  .price-prediction-search-content {
+    gap: 0.625rem;
+  }
+  
+  .price-prediction-search-icon {
+    min-width: 2rem;
+    height: 2rem;
+    font-size: 1rem;
+    padding: 0.375rem;
+  }
+  
+  .price-prediction-search-details {
+    gap: 0.375rem;
+  }
+  
+  .price-prediction-search-property-type {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    max-width: 100%;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .price-prediction-search-address {
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .price-prediction-search-details-row {
+    gap: 0.375rem;
+  }
+  
+  .price-prediction-search-detail {
+    width: 100%;
+    flex-wrap: wrap;
+    font-size: 0.625rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .price-prediction-search-detail strong {
+    font-size: 0.625rem;
+  }
+  
+  .price-prediction-delete-search-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0.375rem;
+    font-size: 0.75rem;
+  }
+  
+  .price-prediction-no-searches {
+    padding: 1.5rem 0.875rem;
+  }
+  
+  .price-prediction-no-searches-icon {
+    font-size: 2rem;
+    margin-bottom: 0.625rem;
+  }
+  
+  .price-prediction-no-searches p {
+    font-size: 0.875rem;
+    margin-bottom: 0.375rem;
+  }
+  
+  .price-prediction-no-searches small {
+    font-size: 0.6875rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .price-prediction-recent-searches-sidebar {
+    padding: 1rem 0.75rem;
+  }
+  
+  .price-prediction-sidebar-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .price-prediction-sidebar-title {
+    font-size: 0.9375rem;
+    width: 100%;
+  }
+  
+  .price-prediction-clear-searches-btn {
+    align-self: flex-end;
+  }
+  
+  .price-prediction-recent-search-item {
+    padding: 0.625rem;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .price-prediction-search-content {
+    width: 100%;
+  }
+  
+  .price-prediction-search-icon {
+    flex-shrink: 0;
+  }
+  
+  .price-prediction-search-details {
+    min-width: 0;
+    flex: 1;
+  }
+  
+  .price-prediction-delete-search-btn {
+    align-self: flex-end;
+    width: 24px;
+    height: 24px;
+  }
+  
+  .price-prediction-search-property-type {
+    max-width: 100%;
+    display: block;
+  }
+  
+  .price-prediction-search-address {
+    max-width: 100%;
   }
 }
 

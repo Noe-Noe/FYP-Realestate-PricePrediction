@@ -59,13 +59,46 @@ class MLReviewFilter:
                 print(f"Warning: Model file not found at {MODEL_PATH}")
                 return False
             
-            model_assets = joblib.load(MODEL_PATH)
+            # Suppress version warnings during loading
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning)
+                model_assets = joblib.load(MODEL_PATH)
+            
             self.model = model_assets.get('model')
             self.label_encoder = model_assets.get('label_encoder')
             self.model_type = 'pipeline'  # The saved model is a pipeline
             self.vectorizer = model_assets.get('vectorizer')  # May not exist for pipeline
             
             if self.model and self.label_encoder:
+                # Validate that the model is actually usable by checking if it's fitted
+                try:
+                    # Try a simple validation - check if the model has the required attributes
+                    # For pipeline models, we need to check if transformers are fitted
+                    if hasattr(self.model, 'steps') or hasattr(self.model, 'named_steps'):
+                        # It's a pipeline - validate by trying to transform a dummy input
+                        test_input = pd.DataFrame([{
+                            'cleaned_text': 'test',
+                            'text_length': 4,
+                            'word_count': 1,
+                            'textblob_polarity': 0.0,
+                            'textblob_subjectivity': 0.0,
+                            'extracted_stars': 0,
+                            'day_of_week': 0,
+                            'month': 1
+                        }])
+                        # Try to transform (this will fail if not fitted)
+                        _ = self.model.predict(test_input)
+                        print("ML Model validated successfully - model is fitted and ready")
+                    else:
+                        # Simple model - check if it has predict method
+                        if hasattr(self.model, 'predict'):
+                            print("ML Model loaded successfully - simple model")
+                except Exception as validation_error:
+                    print(f"Warning: Model loaded but validation failed: {validation_error}")
+                    print("Model may not work correctly due to version mismatch")
+                    # Don't return False - let it try, but log the warning
+                
                 # Debug: Print label encoder info
                 if hasattr(self.label_encoder, 'classes_'):
                     print(f"ML Model loaded successfully. Label classes: {self.label_encoder.classes_}")
@@ -213,9 +246,15 @@ class MLReviewFilter:
             return sentiment, confidence, stars
             
         except Exception as e:
-            print(f"Prediction error: {e}")
-            import traceback
-            traceback.print_exc()
+            error_msg = str(e)
+            if "not fitted" in error_msg.lower() or "idf vector" in error_msg.lower():
+                print(f"Prediction error: Model not properly fitted - likely due to scikit-learn version mismatch")
+                print(f"  Error details: {error_msg}")
+                print(f"  Please ensure scikit-learn version matches the training environment (>=1.7.1)")
+            else:
+                print(f"Prediction error: {e}")
+                import traceback
+                traceback.print_exc()
             return "Unknown", 0.0, None
     
     def is_spam_or_low_quality(self, text):

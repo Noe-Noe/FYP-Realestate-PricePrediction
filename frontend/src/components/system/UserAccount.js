@@ -182,6 +182,7 @@ const UserAccount = () => {
                       <th>User Type</th>
                       <th>Account Created Date</th>
                       <th>Account Status</th>
+                      <th>Verification</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -189,7 +190,17 @@ const UserAccount = () => {
                     {filteredUsers.length > 0 ? (
                       filteredUsers.map((user) => (
                         <tr key={user.id} className="user-account-user-row" onClick={() => handleUserClick(user.id)}>
-                          <td className="user-account-user-name">{user.full_name}</td>
+                          <td className="user-account-user-name">
+                            {user.full_name}
+                            {user.user_type === 'agent' && user.agent_verification_status === 'unverified' && (
+                              <span style={{
+                                marginLeft: '0.5rem',
+                                fontSize: '0.75rem',
+                                color: '#dc2626',
+                                fontWeight: 'bold'
+                              }} title="Agent information does not match CSV records">⚠️</span>
+                            )}
+                          </td>
                           <td className="user-account-user-email">{user.email}</td>
                           <td className="subscription-status">
                             <span className={getSubscriptionBadgeClass(user.user_type)}>
@@ -204,6 +215,25 @@ const UserAccount = () => {
                               {user.subscription_status}
                             </span>
                           </td>
+                          <td className="verification-status">
+                            {user.user_type === 'agent' ? (
+                              <span style={{
+                                padding: '0.25rem 0.5rem',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem',
+                                fontWeight: '500',
+                                backgroundColor: user.agent_verification_status === 'verified' ? '#d1fae5' : 
+                                               user.agent_verification_status === 'unverified' ? '#fee2e2' : '#f3f4f6',
+                                color: user.agent_verification_status === 'verified' ? '#065f46' : 
+                                      user.agent_verification_status === 'unverified' ? '#991b1b' : '#374151'
+                              }}>
+                                {user.agent_verification_status === 'verified' ? '✓ Verified' : 
+                                 user.agent_verification_status === 'unverified' ? '⚠ Unverified' : '⏳ Pending'}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#9ca3af' }}>N/A</span>
+                            )}
+                          </td>
                           <td className="user-account-action-arrow">
                             <span className="user-account-arrow-icon">→</span>
                           </td>
@@ -211,7 +241,7 @@ const UserAccount = () => {
                       ))
                                          ) : (
                        <tr>
-                         <td colSpan="7" className="user-account-no-data">
+                         <td colSpan="8" className="user-account-no-data">
                            {searchQuery ? 'No users match your search' : 'No users found'}
                          </td>
                        </tr>

@@ -363,6 +363,69 @@
   font-weight: 500;
 }
 
+/* Agent Details Section */
+.user-details-agent-info-section {
+  background-color: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.user-details-info-item-full {
+  grid-column: 1 / -1;
+}
+
+.user-details-bio-text {
+  display: block;
+  font-size: 1rem;
+  color: #1e293b;
+  font-weight: 400;
+  line-height: 1.6;
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+}
+
+.user-details-license-picture {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: flex-start;
+}
+
+.user-details-license-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.user-details-license-image {
+  max-width: 100%;
+  max-height: 250px;
+  width: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  object-fit: contain;
+  background-color: #f8fafc;
+}
+
+.user-details-license-link {
+  display: inline-block;
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  transition: all 0.2s;
+  width: fit-content;
+}
+
+.user-details-license-link:hover {
+  background-color: #3b82f6;
+  color: white;
+}
+
 /* Notes Section */
 .user-details-notes-section {
   background-color: white;

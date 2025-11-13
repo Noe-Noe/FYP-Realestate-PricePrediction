@@ -32,19 +32,47 @@ const Dashboard = () => {
         // Check first-time status for different user types
         if (userType === 'free' || userType === 'premium') {
           console.log('👤 Dashboard - Checking first-time user status...');
-          // Check if user has completed first-time setup
-          const userPreferences = localStorage.getItem('userPreferences');
-          const isFirstTimeUser = !userPreferences || !JSON.parse(userPreferences).completed;
-          
-          console.log('🔍 Dashboard - userPreferences:', userPreferences);
-          console.log('🔍 Dashboard - isFirstTimeUser:', isFirstTimeUser);
-          
-          if (isFirstTimeUser) {
-            console.log('🆕 Dashboard - First time user, redirecting to first-time setup');
-            navigate('/first-time');
-            return;
-          } else {
-            console.log('✅ Dashboard - User has completed onboarding');
+          // Always check database for first-time status (more reliable than localStorage)
+          try {
+            const response = await onboardingAPI.checkUserStatus();
+            console.log('🔍 Dashboard - Database response:', response);
+            console.log('🔍 Dashboard - first_time_user value:', response.first_time_user);
+            
+            if (response.first_time_user === true) {
+              console.log('🆕 Dashboard - First time user (confirmed by DB), redirecting to first-time setup');
+              navigate('/first-time');
+              return;
+            } else {
+              // User has completed onboarding, set localStorage and proceed
+              const userPreferencesData = {
+                completed: true,
+                timestamp: new Date().toISOString()
+              };
+              localStorage.setItem('userPreferences', JSON.stringify(userPreferencesData));
+              console.log('✅ Dashboard - User onboarding completed, proceeding to dashboard');
+            }
+          } catch (error) {
+            console.error('❌ Dashboard - Error checking user status:', error);
+            console.error('❌ Dashboard - Error details:', error.message);
+            // On error, check localStorage as fallback
+            const userPreferences = localStorage.getItem('userPreferences');
+            let isFirstTimeUser = true;
+            
+            if (userPreferences) {
+              try {
+                const parsed = JSON.parse(userPreferences);
+                isFirstTimeUser = !parsed.completed;
+              } catch (parseError) {
+                console.error('❌ Dashboard - Error parsing userPreferences:', parseError);
+                isFirstTimeUser = true;
+              }
+            }
+            
+            if (isFirstTimeUser) {
+              console.log('🆕 Dashboard - Fallback: First time user (localStorage check), redirecting to first-time setup');
+              navigate('/first-time');
+              return;
+            }
           }
         } else if (userType === 'agent') {
           console.log('🏢 Dashboard - Checking first-time agent status...');

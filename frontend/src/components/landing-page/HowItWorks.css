@@ -19,10 +19,16 @@
 
 .section-title {
   margin-bottom: 1rem;
+  padding: 0 1rem;
 }
 
 .explore-header {
   margin-bottom: 2rem;
+  padding: 0 1rem;
+}
+
+.explore-header .section-subtitle {
+  padding: 0;
 }
 
 .explore-types {
@@ -30,6 +36,8 @@
   justify-content: center;
   gap: 1rem;
   margin-bottom: 3rem;
+  flex-wrap: wrap;
+  padding: 0 1rem;
 }
 
 .type-pill {
@@ -51,11 +59,7 @@
   margin: 0 auto;
   padding: 2rem 1rem 2rem;
   display: grid;
-<<<<<<< HEAD
-  grid-template-columns: repeat(3, 1fr);
-=======
   grid-template-columns: repeat(4, 1fr);
->>>>>>> Mandy
   gap: 2rem;
 }
 
@@ -77,11 +81,8 @@
   flex-direction: column;
   transition: all 0.3s ease;
   height: 500px;
-<<<<<<< HEAD
-=======
   min-height: 500px;
   max-height: 500px;
->>>>>>> Mandy
   border: 1px solid #e5e7eb;
 }
 
@@ -91,14 +92,10 @@
 }
 
 .how-card-image {
-<<<<<<< HEAD
-  height: 280px;
-=======
   width: 100%;
   height: 160px;
   min-height: 160px;
   max-height: 160px;
->>>>>>> Mandy
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -106,11 +103,8 @@
   position: relative;
   overflow: hidden;
   background-color: #f3f4f6;
-<<<<<<< HEAD
-=======
   flex-shrink: 0;
   display: block;
->>>>>>> Mandy
 }
 
 .how-card-image::after {
@@ -299,24 +293,41 @@
   
   .how-card {
     height: 480px;
-<<<<<<< HEAD
-=======
     min-height: 480px;
     max-height: 480px;
->>>>>>> Mandy
   }
   
   .how-card-image {
     height: 250px;
-<<<<<<< HEAD
-=======
     min-height: 250px;
     max-height: 250px;
->>>>>>> Mandy
   }
 }
 
 @media (max-width: 900px) {
+  .explore {
+    padding: 3rem 1rem;
+  }
+  
+  .section-title {
+    font-size: 2rem;
+    padding: 0 1rem;
+  }
+  
+  .explore-header {
+    margin-bottom: 1.5rem;
+  }
+  
+  .explore-types {
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+  }
+  
+  .type-pill {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+  }
+  
   .how-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
@@ -324,12 +335,9 @@
   }
   
   .how-card {
-    height: 500px;
-<<<<<<< HEAD
-=======
-    min-height: 500px;
-    max-height: 500px;
->>>>>>> Mandy
+    height: auto;
+    min-height: auto;
+    max-height: none;
   }
   
   .details-card {
@@ -344,23 +352,98 @@
 }
 
 @media (max-width: 600px) {
+  .explore {
+    padding: 2.5rem 0.75rem;
+  }
+  
+  .section-title {
+    font-size: 1.75rem;
+    padding: 0 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .section-subtitle {
+    font-size: 0.9375rem;
+    padding: 0 0.75rem;
+  }
+  
+  .explore-header {
+    margin-bottom: 1.5rem;
+    padding: 0 0.75rem;
+  }
+  
+  .explore-types {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    padding: 0 0.75rem;
+  }
+  
+  .type-pill {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+  }
+  
   .how-grid {
     grid-template-columns: 1fr;
-    gap: 1rem;
+    gap: 1.25rem;
+    padding: 1rem 0.75rem 2rem;
+  }
+  
+  .how-card {
+    height: auto;
+    min-height: auto;
+    max-height: none;
+  }
+  
+  .how-card-image {
+    height: 180px;
+    min-height: 180px;
+    max-height: 180px;
   }
   
   .how-card-body {
-    padding: 0.75rem;
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+  
+  .how-card-body h3 {
+    font-size: 1rem;
+    margin: 0.25rem 0 0.375rem 0;
+  }
+  
+  .how-card-body .muted {
+    font-size: 0.8125rem;
   }
   
   .how-meta {
     flex-direction: column;
     gap: 0.5rem;
+    margin: 0.5rem 0 0.75rem;
+  }
+  
+  .meta-badge {
+    font-size: 0.6875rem;
+    padding: 0.25rem 0.625rem;
+  }
+  
+  .meta-item {
+    font-size: 0.8125rem;
+  }
+  
+  .btn-primary {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9375rem;
   }
   
   .how-details {
-    margin: 1rem;
+    margin: 1rem 0.75rem;
     padding: 1rem;
+  }
+  
+  .close-btn {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.8125rem;
   }
 }
 

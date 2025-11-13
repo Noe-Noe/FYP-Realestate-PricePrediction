@@ -346,6 +346,17 @@ const PricePrediction = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Validate floorArea to prevent negative values and zero
+    if (name === 'floorArea') {
+      const numValue = parseFloat(value);
+      if (value !== '' && (isNaN(numValue) || numValue <= 0)) {
+        setSearchError('Floor area must be greater than 0');
+        return;
+      }
+      setSearchError(''); // Clear error if valid
+    }
+    
     setFormData(prev => {
       const newFormData = {
         ...prev,
@@ -362,6 +373,13 @@ const PricePrediction = () => {
     // Validate required fields
     if (!formData.address || !formData.propertyType || !formData.floorArea || !formData.level || !formData.unit) {
       setSearchError('Please fill in all required fields');
+      return;
+    }
+    
+    // Validate floorArea is positive
+    const floorAreaNum = parseFloat(formData.floorArea);
+    if (isNaN(floorAreaNum) || floorAreaNum <= 0) {
+      setSearchError('Floor area must be greater than 0');
       return;
     }
     
@@ -563,6 +581,8 @@ const PricePrediction = () => {
                     value={formData.floorArea}
                     onChange={handleInputChange}
                     placeholder="Enter floor area"
+                    min="0.01"
+                    step="0.01"
                     required
                   />
                 </div>

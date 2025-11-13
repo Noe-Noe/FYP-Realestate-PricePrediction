@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApi } from '../../context/ApiContext';
 import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
-import { agentAPI, propertiesAPI } from '../../services/api';
+import { agentAPI, propertiesAPI, onboardingAPI } from '../../services/api';
 import './agent-common.css';
 import './AgentUser.css';
 
 const AgentUser = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const { getUserName } = useApi();
   const userName = getUserName();
+  const [isCheckingFirstTime, setIsCheckingFirstTime] = useState(true);
 
   // State for real data
   const [stats, setStats] = useState({
@@ -24,6 +27,77 @@ const AgentUser = () => {
   const [listings, setListings] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Check first-time agent status on component mount
+  useEffect(() => {
+    const checkFirstTimeStatus = async () => {
+      console.log('🔍 AgentUser - Checking first-time agent status...');
+      
+      const accessToken = localStorage.getItem('accessToken');
+      const userType = localStorage.getItem('userType');
+      
+      if (!accessToken) {
+        console.log('❌ AgentUser - No access token, redirecting to landing page');
+        navigate('/');
+        return;
+      }
+      
+      if (userType !== 'agent') {
+        console.log('❌ AgentUser - User is not an agent, redirecting to dashboard');
+        navigate('/dashboard');
+        return;
+      }
+      
+      // Always check database for first-time status (more reliable than localStorage)
+      console.log('🆕 AgentUser - Checking database for first-time agent status...');
+      try {
+        const response = await onboardingAPI.checkAgentStatus();
+        console.log('🔍 AgentUser - Database response:', response);
+        console.log('🔍 AgentUser - first_time_agent value:', response.first_time_agent);
+        
+        if (response.first_time_agent === true) {
+          console.log('🆕 AgentUser - First time agent (confirmed by DB), redirecting to agent setup');
+          navigate('/first-time-agent');
+          return;
+        } else {
+          // Agent has completed onboarding, set localStorage and proceed
+          const agentRegionsData = {
+            regions: [],
+            completed: true,
+            timestamp: new Date().toISOString()
+          };
+          localStorage.setItem('agentRegions', JSON.stringify(agentRegionsData));
+          console.log('✅ AgentUser - Agent onboarding completed, proceeding to dashboard');
+        }
+      } catch (error) {
+        console.error('❌ AgentUser - Error checking agent status:', error);
+        console.error('❌ AgentUser - Error details:', error.message);
+        // On error, check localStorage as fallback
+        const agentRegions = localStorage.getItem('agentRegions');
+        let isFirstTimeAgentLocal = true;
+        
+        if (agentRegions) {
+          try {
+            const parsed = JSON.parse(agentRegions);
+            isFirstTimeAgentLocal = !parsed.completed;
+          } catch (parseError) {
+            console.error('❌ AgentUser - Error parsing agentRegions:', parseError);
+            isFirstTimeAgentLocal = true;
+          }
+        }
+        
+        if (isFirstTimeAgentLocal) {
+          console.log('🆕 AgentUser - Fallback: First time agent (localStorage check), redirecting to agent setup');
+          navigate('/first-time-agent');
+          return;
+        }
+      }
+      
+      setIsCheckingFirstTime(false);
+    };
+
+    checkFirstTimeStatus();
+  }, [navigate]);
 
   // Fetch data from database
   useEffect(() => {
@@ -71,8 +145,27 @@ const AgentUser = () => {
       }
     };
 
-    fetchData();
-  }, []);
+    // Only fetch data if not checking first-time status
+    if (!isCheckingFirstTime) {
+      fetchData();
+    }
+  }, [isCheckingFirstTime]);
+
+  // Show loading while checking first-time status
+  if (isCheckingFirstTime) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        fontSize: '1.2rem',
+        color: '#666'
+      }}>
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="user-dashboard">

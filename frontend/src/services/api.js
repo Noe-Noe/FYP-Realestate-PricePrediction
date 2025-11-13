@@ -1,13 +1,26 @@
-// Resolve backend origin with environment variable fallback
-export const BACKEND_ORIGIN =
-  (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_ORIGIN) ||
-  (typeof window !== 'undefined' && window.__BACKEND_ORIGIN__) ||
-  (typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost'
-    ? 'http://localhost:5001'
-    : '');
+// Determine backend origin
+export const BACKEND_ORIGIN = (() => {
+  // React build-time env variable (Vercel / local build)
+  if (process.env.REACT_APP_BACKEND_ORIGIN) {
+    return process.env.REACT_APP_BACKEND_ORIGIN;
+  }
 
-// If BACKEND_ORIGIN is empty (same-origin deployments), API calls will use relative paths
-const API_BASE_URL = BACKEND_ORIGIN ? `${BACKEND_ORIGIN}/api` : '/api';
+  // Optional: window override for advanced setups
+  if (typeof window !== 'undefined' && window.__BACKEND_ORIGIN__) {
+    return window.__BACKEND_ORIGIN__;
+  }
+
+  // Fallback for local development
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return 'http://localhost:5001'; // Your local Flask backend
+  }
+
+  // Same-origin deployment (e.g., frontend + backend on same domain)
+  return '';
+})();
+
+// Construct API base URL
+export const API_BASE_URL = BACKEND_ORIGIN ? `${BACKEND_ORIGIN}/api` : '/api';
 
 // Helper function for API calls
 const apiCall = async (endpoint, method = 'GET', data = null, options = {}) => {

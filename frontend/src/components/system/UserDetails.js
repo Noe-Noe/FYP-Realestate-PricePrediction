@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { authAPI } from '../../services/api';
+import { authAPI, BACKEND_ORIGIN } from '../../services/api';
 import Header from '../sharedpages/header';
 import Navbar from '../sharedpages/navbar';
 import Footer from '../sharedpages/footer';
@@ -11,7 +11,6 @@ const UserDetails = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('user-accounts');
   const [user, setUser] = useState(null);
-  const [notes, setNotes] = useState('');
   const [editingUserType, setEditingUserType] = useState(false);
   const [selectedUserType, setSelectedUserType] = useState('');
   const [savingUserType, setSavingUserType] = useState(false);
@@ -105,12 +104,9 @@ const UserDetails = () => {
     try {
       await authAPI.deactivateUser(user.id);
       
-      // Update local user state
-      setUser(prevUser => ({
-        ...prevUser,
-        is_active: false,
-        subscription_status: 'Inactive'
-      }));
+      // Refresh user data from server to get accurate status
+      const userData = await authAPI.getUserById(userId);
+      setUser(userData);
       
       // Show success message
       alert('User deactivated successfully');
@@ -129,11 +125,9 @@ const UserDetails = () => {
     try {
       await authAPI.suspendUser(user.id);
       
-      // Update local user state
-      setUser(prevUser => ({
-        ...prevUser,
-        subscription_status: 'Suspended'
-      }));
+      // Refresh user data from server to get accurate status
+      const userData = await authAPI.getUserById(userId);
+      setUser(userData);
       
       // Show success message
       alert('User suspended successfully');
@@ -152,12 +146,9 @@ const UserDetails = () => {
     try {
       await authAPI.reactivateUser(user.id);
       
-      // Update local user state
-      setUser(prevUser => ({
-        ...prevUser,
-        is_active: true,
-        subscription_status: 'Active'
-      }));
+      // Refresh user data from server to get accurate status
+      const userData = await authAPI.getUserById(userId);
+      setUser(userData);
       
       // Show success message
       alert('User reactivated successfully');
@@ -210,10 +201,6 @@ const UserDetails = () => {
     } finally {
       setSavingUserType(false);
     }
-  };
-
-  const handleNotesChange = (e) => {
-    setNotes(e.target.value);
   };
 
   const getSubscriptionBadgeClass = (status) => {
@@ -394,40 +381,46 @@ const UserDetails = () => {
                 </div>
               </div>
               <div className="user-details-action-buttons">
-                {user.is_active && user.subscription_status !== 'Suspended' ? (
-                  <>
-                    <button 
-                      className="user-details-action-btn user-details-deactivate-btn" 
-                      onClick={handleDeactivate}
-                      disabled={user.user_type === 'admin'}
-                      title={user.user_type === 'admin' ? 'Admin accounts cannot be deactivated' : ''}
-                    >
-                      Deactivate
-                    </button>
-                    <button 
-                      className="user-details-action-btn user-details-suspend-btn" 
-                      onClick={handleSuspend}
-                      disabled={user.user_type === 'admin'}
-                      title={user.user_type === 'admin' ? 'Admin accounts cannot be suspended' : ''}
-                    >
-                      Suspend
-                    </button>
-                  </>
-                ) : user.subscription_status === 'Suspended' ? (
-                  <button 
-                    className="user-details-action-btn user-details-reactivate-btn" 
-                    onClick={handleReactivate}
-                  >
-                    Reactivate
-                  </button>
-                ) : (
-                  <button 
-                    className="user-details-action-btn user-details-reactivate-btn" 
-                    onClick={handleReactivate}
-                  >
-                    Reactivate
-                  </button>
-                )}
+                {(() => {
+                  // Normalize subscription_status to handle both lowercase and capitalized values
+                  const status = (user.subscription_status || '').toLowerCase();
+                  const isSuspended = status === 'cancelled' || status === 'suspended';
+                  const isActive = user.is_active === true || user.is_active === 'true';
+                  
+                  // Show Deactivate/Suspend buttons if user is active and not suspended
+                  if (isActive && !isSuspended) {
+                    return (
+                      <>
+                        <button 
+                          className="user-details-action-btn user-details-deactivate-btn" 
+                          onClick={handleDeactivate}
+                          disabled={user.user_type === 'admin'}
+                          title={user.user_type === 'admin' ? 'Admin accounts cannot be deactivated' : ''}
+                        >
+                          Deactivate
+                        </button>
+                        <button 
+                          className="user-details-action-btn user-details-suspend-btn" 
+                          onClick={handleSuspend}
+                          disabled={user.user_type === 'admin'}
+                          title={user.user_type === 'admin' ? 'Admin accounts cannot be suspended' : ''}
+                        >
+                          Suspend
+                        </button>
+                      </>
+                    );
+                  } else {
+                    // Show Reactivate button if user is deactivated or suspended
+                    return (
+                      <button 
+                        className="user-details-action-btn user-details-reactivate-btn" 
+                        onClick={handleReactivate}
+                      >
+                        Reactivate
+                      </button>
+                    );
+                  }
+                })()}
               </div>
             </section>
 
@@ -479,17 +472,175 @@ const UserDetails = () => {
               </div>
             </section>
 
-            {/* Notes & Comments Section */}
-            <section className="user-details-notes-section">
-              <h2 className="user-details-section-title">Notes & Comments</h2>
-              <textarea
-                className="user-details-notes-textarea"
-                placeholder="Add internal notes about this user..."
-                value={notes}
-                onChange={handleNotesChange}
-                rows={6}
-              />
-            </section>
+            {/* Agent Details Section - Only show if user is an agent */}
+            {user.user_type === 'agent' && user.agent_profile && (
+              <section className="user-details-agent-info-section">
+                <h2 className="user-details-section-title">Agent Details</h2>
+                
+                {/* Debug: Log validation details */}
+                {console.log('Validation details:', user.agent_profile.validation_details)}
+                
+                {/* Verification Status Warning */}
+                {user.agent_profile.verification_status === 'unverified' && (
+                  <div className="user-details-verification-warning" style={{
+                    backgroundColor: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    marginBottom: '1.5rem',
+                    color: '#dc2626'
+                  }}>
+                    <strong>⚠️ Verification Alert:</strong> This agent's information does not match the records. Please verify the agent's credentials.
+                  </div>
+                )}
+                
+                {user.agent_profile.verification_status === 'verified' && (
+                  <div className="user-details-verification-success" style={{
+                    backgroundColor: '#f0fdf4',
+                    border: '1px solid #86efac',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    marginBottom: '1.5rem',
+                    color: '#166534'
+                  }}>
+                    <strong>✓ Verified:</strong> Agent information matches records.
+                    {user.agent_profile.verification_checked_at && (
+                      <span style={{ display: 'block', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                        Last verified: {new Date(user.agent_profile.verification_checked_at).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                )}
+                
+                <div className="user-details-info-grid">
+                  <div className="user-details-info-item">
+                    <label>Salesperson Name:</label>
+                    <span>
+                      {user.full_name || 'N/A'}
+                      {user.agent_profile.validation_details && 
+                       user.agent_profile.validation_details.salesperson_match === false && (
+                        <span style={{ color: '#dc2626', marginLeft: '0.5rem', fontWeight: 'bold', fontSize: '1.2rem' }} title="This field does not match CSV records">!</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="user-details-info-item">
+                    <label>License Number (CEA):</label>
+                    <span>
+                      {user.agent_profile.license_number || 'N/A'}
+                      {user.agent_profile.validation_details && 
+                       (user.agent_profile.validation_details.license_match === false || 
+                        user.agent_profile.validation_details.license_match === undefined) && (
+                        <span style={{ color: '#dc2626', marginLeft: '0.5rem', fontWeight: 'bold', fontSize: '1.2rem' }} title="This field does not match CSV records">!</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="user-details-info-item">
+                    <label>Company Name:</label>
+                    <span>
+                      {user.agent_profile.company_name || 'N/A'}
+                      {user.agent_profile.validation_details && 
+                       user.agent_profile.validation_details.company_match === false && (
+                        <span style={{ color: '#dc2626', marginLeft: '0.5rem', fontWeight: 'bold', fontSize: '1.2rem' }} title="This field does not match CSV records">!</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="user-details-info-item">
+                    <label>Registration Start Date:</label>
+                    <span>
+                      {user.agent_profile.registration_start_date 
+                        ? new Date(user.agent_profile.registration_start_date).toLocaleDateString() 
+                        : 'N/A'}
+                      {user.agent_profile.validation_details && 
+                       user.agent_profile.validation_details.registration_date_match === false && (
+                        <span style={{ color: '#dc2626', marginLeft: '0.5rem', fontWeight: 'bold', fontSize: '1.2rem' }} title="This field does not match CSV records">!</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="user-details-info-item">
+                    <label>Verification Status:</label>
+                    <span style={{
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                      backgroundColor: user.agent_profile.verification_status === 'verified' ? '#d1fae5' : 
+                                     user.agent_profile.verification_status === 'unverified' ? '#fee2e2' : '#f3f4f6',
+                      color: user.agent_profile.verification_status === 'verified' ? '#065f46' : 
+                            user.agent_profile.verification_status === 'unverified' ? '#991b1b' : '#374151'
+                    }}>
+                      {user.agent_profile.verification_status === 'verified' ? '✓ Verified' : 
+                       user.agent_profile.verification_status === 'unverified' ? '⚠ Unverified' : '⏳ Pending'}
+                    </span>
+                  </div>
+                  {user.agent_profile.company_phone && (
+                    <div className="user-details-info-item">
+                      <label>Company Phone:</label>
+                      <span>{user.agent_profile.company_phone}</span>
+                    </div>
+                  )}
+                  {user.agent_profile.company_email && (
+                    <div className="user-details-info-item">
+                      <label>Company Email:</label>
+                      <span>{user.agent_profile.company_email}</span>
+                    </div>
+                  )}
+                  {user.agent_profile.specializations && Array.isArray(user.agent_profile.specializations) && user.agent_profile.specializations.length > 0 && (
+                    <div className="user-details-info-item">
+                      <label>Specializations:</label>
+                      <span>{user.agent_profile.specializations.join(', ')}</span>
+                    </div>
+                  )}
+                  {user.agent_profile.license_picture_url && (
+                    <div className="user-details-info-item user-details-info-item-full">
+                      <label>License Document:</label>
+                      <div className="user-details-license-picture">
+                        {(() => {
+                          const licenseUrl = `${BACKEND_ORIGIN || ''}${user.agent_profile.license_picture_url}`;
+                          const isImage = /\.(jpg|jpeg|png|gif)$/i.test(user.agent_profile.license_picture_url);
+                          const isPdf = /\.pdf$/i.test(user.agent_profile.license_picture_url);
+                          
+                          if (isImage) {
+                            return (
+                              <div className="user-details-license-preview">
+                                <img 
+                                  src={licenseUrl} 
+                                  alt="License Document" 
+                                  className="user-details-license-image"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'block';
+                                  }}
+                                />
+                                <a 
+                                  href={licenseUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="user-details-license-link"
+                                  style={{ display: 'none' }}
+                                >
+                                  View License Document
+                                </a>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <a 
+                                href={licenseUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="user-details-license-link"
+                              >
+                                {isPdf ? 'View PDF License Document' : 'View License Document'}
+                              </a>
+                            );
+                          }
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* Back Button */}
             <div className="user-details-back-button-container">

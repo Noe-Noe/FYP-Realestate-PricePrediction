@@ -7,11 +7,13 @@ import api from '../../services/api';
 
 const AddTeamMember = () => {
   const [activeTab, setActiveTab] = useState('content');
+  const [imageSource, setImageSource] = useState('upload'); // 'upload' or 'url'
   const [formData, setFormData] = useState({
     name: '',
     role: '',
     description: '',
     image: null,
+    imageUrl: '',
     imagePreview: null,
     social_links: {}
   });
@@ -31,7 +33,8 @@ const AddTeamMember = () => {
     if (file) {
       setFormData(prev => ({
         ...prev,
-        image: file
+        image: file,
+        imageUrl: '' // Clear URL when file is selected
       }));
 
       const reader = new FileReader();
@@ -43,6 +46,27 @@ const AddTeamMember = () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleImageUrlChange = (e) => {
+    const url = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      imageUrl: url,
+      image: null, // Clear file when URL is entered
+      imagePreview: url || null // Set preview to URL if provided
+    }));
+  };
+
+  const handleImageSourceChange = (source) => {
+    setImageSource(source);
+    // Clear both when switching
+    setFormData(prev => ({
+      ...prev,
+      image: null,
+      imageUrl: '',
+      imagePreview: null
+    }));
   };
 
   const handleSaveTeamMember = async () => {
@@ -63,8 +87,9 @@ const AddTeamMember = () => {
       
       let imageUrl = ''; // Default empty image URL
       
-      // If an image was uploaded, upload it first
-      if (formData.image) {
+      // Handle image based on source type
+      if (imageSource === 'upload' && formData.image) {
+        // Upload file if file was selected
         try {
           const uploadResponse = await api.team.uploadProfilePicture(formData.image);
           if (uploadResponse.profile_picture_url) {
@@ -73,6 +98,17 @@ const AddTeamMember = () => {
         } catch (uploadError) {
           console.error('Error uploading image:', uploadError);
           setMessage('Error uploading image. Please try again.');
+          return;
+        }
+      } else if (imageSource === 'url' && formData.imageUrl.trim()) {
+        // Use URL directly if URL was provided
+        imageUrl = formData.imageUrl.trim();
+        
+        // Basic URL validation
+        try {
+          new URL(imageUrl);
+        } catch {
+          setMessage('Error: Please enter a valid URL');
           return;
         }
       }
@@ -187,7 +223,34 @@ const AddTeamMember = () => {
             </div>
 
             <div className="add-team-member-form-group">
-              <label htmlFor="image" className="add-team-member-form-label">Profile Image</label>
+              <label className="add-team-member-form-label">Profile Image</label>
+              
+              {/* Image Source Selection */}
+              <div className="add-team-member-image-source-selection" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', marginRight: '20px', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="imageSource"
+                    value="upload"
+                    checked={imageSource === 'upload'}
+                    onChange={() => handleImageSourceChange('upload')}
+                    style={{ marginRight: '8px' }}
+                  />
+                  Upload File
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="imageSource"
+                    value="url"
+                    checked={imageSource === 'url'}
+                    onChange={() => handleImageSourceChange('url')}
+                    style={{ marginRight: '8px' }}
+                  />
+                  Image URL
+                </label>
+              </div>
+
               <div className="add-team-member-image-upload-section">
                 {formData.imagePreview && (
                   <div className="add-team-member-image-preview">
@@ -195,20 +258,40 @@ const AddTeamMember = () => {
                       src={formData.imagePreview}
                       alt="Profile preview"
                       className="add-team-member-preview-image"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        setMessage('Error: Could not load image from URL');
+                      }}
                     />
                   </div>
                 )}
-                <input
-                  type="file"
-                  id="image"
-                  name="image"
-                  onChange={handleImageUpload}
-                  className="add-team-member-file-input"
-                  accept="image/*"
-                />
-                <label htmlFor="image" className="add-team-member-upload-btn">
-                  {formData.imagePreview ? 'Change Image' : 'Upload Profile Image'}
-                </label>
+                
+                {imageSource === 'upload' ? (
+                  <>
+                    <input
+                      type="file"
+                      id="image"
+                      name="image"
+                      onChange={handleImageUpload}
+                      className="add-team-member-file-input"
+                      accept="image/*"
+                    />
+                    <label htmlFor="image" className="add-team-member-upload-btn">
+                      {formData.imagePreview ? 'Change Image' : 'Upload Profile Image'}
+                    </label>
+                  </>
+                ) : (
+                  <input
+                    type="url"
+                    id="imageUrl"
+                    name="imageUrl"
+                    value={formData.imageUrl}
+                    onChange={handleImageUrlChange}
+                    className="add-team-member-form-input"
+                    placeholder="Enter image URL (e.g., https://example.com/image.jpg)"
+                    style={{ marginTop: '10px' }}
+                  />
+                )}
               </div>
             </div>
 

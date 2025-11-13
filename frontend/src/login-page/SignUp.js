@@ -22,6 +22,7 @@ const SignUp = () => {
     companyEmail: '',
     ceaLicense: null,
     specializations: [], // Array of selected property type specializations
+    registrationStartDate: '',
     yearlyBilling: false // Added for pricing toggle
   });
   const [errors, setErrors] = useState({});
@@ -493,6 +494,19 @@ const SignUp = () => {
           console.log('User type from login result:', loginResult.user?.user_type);
           console.log('User type from form:', formData.userType);
           
+          // Set token and userType in localStorage (same as context login function)
+          if (loginResult.access_token) {
+            localStorage.setItem('accessToken', loginResult.access_token);
+          }
+          if (loginResult.user?.user_type) {
+            localStorage.setItem('userType', loginResult.user.user_type);
+            console.log('✅ Set userType in localStorage:', loginResult.user.user_type);
+          } else if (formData.userType) {
+            // Fallback to formData if login response doesn't have it
+            localStorage.setItem('userType', formData.userType);
+            console.log('✅ Set userType from formData in localStorage:', formData.userType);
+          }
+          
           // Now navigate based on user type
           if (formData.userType === 'agent') {
             console.log('Agent user registration complete, navigating to agent dashboard');
@@ -513,7 +527,8 @@ const SignUp = () => {
                   company_name: formData.company,
                   company_phone: formData.workNumber,
                   company_email: formData.companyEmail,
-                  specializations: formData.specializations
+                  specializations: formData.specializations,
+                  registration_start_date: formData.registrationStartDate
                 }
               };
               await authAPI.updateProfile(profileData);
@@ -581,6 +596,19 @@ const SignUp = () => {
           console.log('User type from login result:', loginResult.user?.user_type);
           console.log('User type from form:', formData.userType);
           
+          // Set token and userType in localStorage (same as context login function)
+          if (loginResult.access_token) {
+            localStorage.setItem('accessToken', loginResult.access_token);
+          }
+          if (loginResult.user?.user_type) {
+            localStorage.setItem('userType', loginResult.user.user_type);
+            console.log('✅ Set userType in localStorage:', loginResult.user.user_type);
+          } else if (formData.userType) {
+            // Fallback to formData if login response doesn't have it
+            localStorage.setItem('userType', formData.userType);
+            console.log('✅ Set userType from formData in localStorage:', formData.userType);
+          }
+          
           // Now navigate based on user type
           if (formData.userType === 'agent') {
             console.log('Agent user registration complete, navigating to agent dashboard');
@@ -601,7 +629,8 @@ const SignUp = () => {
                   company_name: formData.company,
                   company_phone: formData.workNumber,
                   company_email: formData.companyEmail,
-                  specializations: formData.specializations
+                  specializations: formData.specializations,
+                  registration_start_date: formData.registrationStartDate
                 }
               };
               await authAPI.updateProfile(profileData);
@@ -1080,6 +1109,22 @@ const SignUp = () => {
         {errors.specializations && <span className="error-message">{errors.specializations}</span>}
         <small className="signup-form-help-text">
           Select one or more property types you specialize in
+        </small>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="registrationStartDate">Registration Start Date</label>
+        <input
+          type="date"
+          id="registrationStartDate"
+          name="registrationStartDate"
+          value={formData.registrationStartDate}
+          onChange={(e) => setFormData(prev => ({ ...prev, registrationStartDate: e.target.value }))}
+          className={errors.registrationStartDate ? 'error' : ''}
+        />
+        {errors.registrationStartDate && <span className="error-message">{errors.registrationStartDate}</span>}
+        <small className="signup-form-help-text">
+          The date when you started your agent registration
         </small>
       </div>
 

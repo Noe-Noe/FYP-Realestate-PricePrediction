@@ -88,59 +88,7 @@ const ComparePrediction = () => {
     'Level 5+'
   ];
 
-  const [recentComparisons, setRecentComparisons] = useState([
-    {
-      id: 1,
-      property1: {
-        propertyType: 'Single-user Factory',
-        address: '123 Main Street, Singapore',
-        floorArea: '1,500',
-        level: 'Ground Floor',
-        unit: 'A-01'
-      },
-      property2: {
-        propertyType: 'Office',
-        address: '456 Oak Avenue, Singapore',
-        floorArea: '2,000',
-        level: 'Level 2',
-        unit: 'B-15'
-      }
-    },
-    {
-      id: 2,
-      property1: {
-        propertyType: 'Warehouse',
-        address: '789 Pine Lane, Singapore',
-        floorArea: '3,000',
-        level: 'Level 1',
-        unit: 'C-03'
-      },
-      property2: {
-        propertyType: 'Retail',
-        address: '321 Elm Street, Singapore',
-        floorArea: '1,800',
-        level: 'Level 3',
-        unit: 'D-22'
-      }
-    },
-    {
-      id: 3,
-      property1: {
-        propertyType: 'Shop House',
-        address: '654 Maple Drive, Singapore',
-        floorArea: '800',
-        level: 'Ground Floor',
-        unit: 'E-05'
-      },
-      property2: {
-        propertyType: 'Business Parks',
-        address: '987 Cedar Road, Singapore',
-        floorArea: '5,000',
-        level: 'Level 1',
-        unit: 'F-10'
-      }
-    }
-  ]);
+  const [recentComparisons, setRecentComparisons] = useState([]);
 
   // Load recent comparisons from localStorage
   useEffect(() => {
@@ -332,6 +280,17 @@ const ComparePrediction = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Validate floorArea to prevent negative values and zero
+    if (name === 'floorArea') {
+      const numValue = parseFloat(value);
+      if (value !== '' && (isNaN(numValue) || numValue <= 0)) {
+        setSearchError('Floor area must be greater than 0');
+        return;
+      }
+      setSearchError(''); // Clear error if valid
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -341,6 +300,13 @@ const ComparePrediction = () => {
   const handleAddProperty = () => {
     if (!formData.propertyType || !formData.address || !formData.floorArea || !formData.level) {
       alert('Please fill in all required fields');
+      return;
+    }
+
+    // Validate floorArea is positive
+    const floorAreaNum = parseFloat(formData.floorArea);
+    if (isNaN(floorAreaNum) || floorAreaNum <= 0) {
+      alert('Floor area must be greater than 0');
       return;
     }
 
@@ -556,6 +522,8 @@ const ComparePrediction = () => {
                       value={formData.floorArea}
                       onChange={handleInputChange}
                       placeholder="Enter floor area"
+                      min="0.01"
+                      step="0.01"
                       required
                     />
                   </div>
