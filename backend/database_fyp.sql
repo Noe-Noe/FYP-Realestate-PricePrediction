@@ -3,7 +3,7 @@
 
 -- Users table (main user accounts)
 -- Includes user preferences for property recommendations
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE users (
 );
 
 -- User subscriptions
-CREATE TABLE user_subscriptions (
+CREATE TABLE IF NOT EXISTS user_subscriptions (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     plan_type VARCHAR(20) CHECK (plan_type IN ('free', 'premium')) NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE user_subscriptions (
 );
 
 -- Properties table (without PostGIS geometry for now)
-CREATE TABLE properties (
+CREATE TABLE IF NOT EXISTS properties (
     id SERIAL PRIMARY KEY,
     agent_id INTEGER NOT NULL,
     title VARCHAR(255) NOT NULL,
@@ -68,7 +68,7 @@ CREATE TABLE properties (
 );
 
 -- Property amenities
-CREATE TABLE property_amenities (
+CREATE TABLE IF NOT EXISTS property_amenities (
     id SERIAL PRIMARY KEY,
     property_id INTEGER NOT NULL,
     amenity_name VARCHAR(100) NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE property_amenities (
 );
 
 -- Property images
-CREATE TABLE property_images (
+CREATE TABLE IF NOT EXISTS property_images (
     id SERIAL PRIMARY KEY,
     property_id INTEGER NOT NULL,
     image_url VARCHAR(500) NOT NULL,
@@ -88,7 +88,7 @@ CREATE TABLE property_images (
 );
 
 -- Price predictions
-CREATE TABLE price_predictions (
+CREATE TABLE IF NOT EXISTS price_predictions (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     property_address VARCHAR(500) NOT NULL,
@@ -102,7 +102,7 @@ CREATE TABLE price_predictions (
 );
 
 -- Property comparisons
-CREATE TABLE property_comparisons (
+CREATE TABLE IF NOT EXISTS property_comparisons (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     comparison_name VARCHAR(255),
@@ -112,7 +112,7 @@ CREATE TABLE property_comparisons (
 );
 
 -- Market analytics
-CREATE TABLE market_analytics (
+CREATE TABLE IF NOT EXISTS market_analytics (
     id SERIAL PRIMARY KEY,
     property_type VARCHAR(100) NOT NULL,
     location_area VARCHAR(100) NOT NULL,
@@ -124,7 +124,7 @@ CREATE TABLE market_analytics (
 );
 
 -- Bookmarks
-CREATE TABLE bookmarks (
+CREATE TABLE IF NOT EXISTS bookmarks (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     bookmark_type VARCHAR(20) CHECK (bookmark_type IN ('property', 'prediction', 'comparison')) NOT NULL,
@@ -146,7 +146,7 @@ CREATE TABLE bookmarks (
 );
 
 -- Property views tracking
-CREATE TABLE property_views (
+CREATE TABLE IF NOT EXISTS property_views (
     id SERIAL PRIMARY KEY,
     property_id INTEGER NOT NULL,
     user_id INTEGER NULL,  -- Can be NULL for anonymous views
@@ -160,7 +160,7 @@ CREATE TABLE property_views (
 );
 
 -- User feedback/reviews
-CREATE TABLE user_reviews (
+CREATE TABLE IF NOT EXISTS user_reviews (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     review_type VARCHAR(20) CHECK (review_type IN ('platform', 'property', 'agent')) NOT NULL,
@@ -175,7 +175,7 @@ CREATE TABLE user_reviews (
 );
 
 -- Review interactions (likes/dislikes)
-CREATE TABLE review_interactions (
+CREATE TABLE IF NOT EXISTS review_interactions (
     id SERIAL PRIMARY KEY,
     review_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
@@ -187,7 +187,7 @@ CREATE TABLE review_interactions (
 );
 
 -- Content sections
-CREATE TABLE content_sections (
+CREATE TABLE IF NOT EXISTS content_sections (
     id SERIAL PRIMARY KEY,
     section_name VARCHAR(100) UNIQUE NOT NULL,
     section_type VARCHAR(20) CHECK (section_type IN ('hero', 'explore', 'features', 'reviews', 'subscription', 'faq', 'team', 'contact', 'disclaimer', 'legal', 'privacy')) NOT NULL,
@@ -196,7 +196,7 @@ CREATE TABLE content_sections (
 );
 
 -- Content versions
-CREATE TABLE content_versions (
+CREATE TABLE IF NOT EXISTS content_versions (
     id SERIAL PRIMARY KEY,
     section_id INTEGER NOT NULL,
     content_data JSONB NOT NULL,
@@ -218,7 +218,7 @@ CREATE TABLE IF NOT EXISTS faq_section (
 );
 
 -- FAQ entries
-CREATE TABLE faq_entries (
+CREATE TABLE IF NOT EXISTS faq_entries (
     id SERIAL PRIMARY KEY,
     question TEXT NOT NULL,
     answer TEXT NOT NULL,
@@ -253,7 +253,7 @@ CREATE TABLE IF NOT EXISTS legal_content (
 );
 
 -- Agent profiles
-CREATE TABLE agent_profiles (
+CREATE TABLE IF NOT EXISTS agent_profiles (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL UNIQUE,
     license_number VARCHAR(100),
@@ -286,7 +286,7 @@ COMMENT ON COLUMN property_views.ip_address IS 'IP address for anonymous view tr
 COMMENT ON COLUMN property_views.viewed_at IS 'Timestamp when the property was viewed';
 
 -- Regions table (master list of available regions)
-CREATE TABLE regions (
+CREATE TABLE IF NOT EXISTS regions (
     id SERIAL PRIMARY KEY,
     district VARCHAR(10) NOT NULL,
     sector VARCHAR(100) NOT NULL,
@@ -297,7 +297,7 @@ CREATE TABLE regions (
 );
 
 -- Agent regions (assignments of agents to regions)
-CREATE TABLE agent_regions (
+CREATE TABLE IF NOT EXISTS agent_regions (
     id SERIAL PRIMARY KEY,
     agent_id INTEGER NOT NULL,
     region_name VARCHAR(100) NOT NULL,
@@ -307,7 +307,7 @@ CREATE TABLE agent_regions (
 );
 
 -- Business inquiries
-CREATE TABLE business_inquiries (
+CREATE TABLE IF NOT EXISTS business_inquiries (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NULL,
     name VARCHAR(255) NOT NULL,
@@ -395,7 +395,7 @@ CREATE TABLE IF NOT EXISTS team_members (
 );
 
 -- System logs
-CREATE TABLE system_logs (
+CREATE TABLE IF NOT EXISTS system_logs (
     id SERIAL PRIMARY KEY,
     log_level VARCHAR(20) CHECK (log_level IN ('info', 'warning', 'error', 'critical')) NOT NULL,
     log_message TEXT NOT NULL,
@@ -407,7 +407,7 @@ CREATE TABLE system_logs (
 );
 
 -- Subscription Plans
-CREATE TABLE subscription_plans (
+CREATE TABLE IF NOT EXISTS subscription_plans (
     id SERIAL PRIMARY KEY,
     plan_name VARCHAR(100) NOT NULL,
     plan_type VARCHAR(20) CHECK (plan_type IN ('free', 'premium', 'agent')) NOT NULL,
@@ -422,7 +422,7 @@ CREATE TABLE subscription_plans (
 );
 
 -- Subscription Plan Features
-CREATE TABLE subscription_plan_features (
+CREATE TABLE IF NOT EXISTS subscription_plan_features (
     id SERIAL PRIMARY KEY,
     plan_id INTEGER NOT NULL,
     feature_name VARCHAR(255) NOT NULL,
@@ -435,7 +435,7 @@ CREATE TABLE subscription_plan_features (
 );
 
 -- Important Features for Comparison
-CREATE TABLE important_features (
+CREATE TABLE IF NOT EXISTS important_features (
     id SERIAL PRIMARY KEY,
     feature_name VARCHAR(255) NOT NULL,
     feature_description TEXT,
@@ -446,7 +446,7 @@ CREATE TABLE important_features (
 );
 
 -- User sessions
-CREATE TABLE user_sessions (
+CREATE TABLE IF NOT EXISTS user_sessions (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     session_token VARCHAR(255) UNIQUE NOT NULL,
@@ -459,7 +459,7 @@ CREATE TABLE user_sessions (
 );
 
 -- Data backup logs
-CREATE TABLE backup_logs (
+CREATE TABLE IF NOT EXISTS backup_logs (
     id SERIAL PRIMARY KEY,
     backup_type VARCHAR(20) CHECK (backup_type IN ('full', 'incremental', 'user_data', 'content')) NOT NULL,
     backup_size_mb DECIMAL(10,2),
