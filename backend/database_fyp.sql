@@ -645,6 +645,11 @@ INSERT INTO howitworks_properties (id, property_order, title, address, level, un
   (2, 2, 'Sample Title 2', '456 Example Ave', 'Level 5', '85 sqm', 'Condo', NULL, true),
   (3, 3, 'Sample Title 3', '789 Example Rd', 'Level 10', '120 sqm', 'HDB', NULL, true)
 ON CONFLICT (id) DO NOTHING;
+INSERT INTO howitworks_properties
+  (id, property_order, title, address, level, unit_area, property_type, image_url, is_active)
+VALUES
+  (4, 4, 'Sample Title 4', '202 Example Blvd', 'Level 7', '110 sqm', 'Condo', NULL, true)
+ON CONFLICT (id) DO NOTHING;
 
 -- INSERT SYSTEM ADMIN
 -- Default password: admin123 (should be changed after first login)
@@ -666,30 +671,4 @@ INSERT INTO users (
     FALSE
 )
 ON CONFLICT (email) DO NOTHING;
-
--- INSERT INTO HOW IT WORKS PROPERTIES
-INSERT INTO howitworks_properties (
-    property_order,
-    title,
-    address,
-    level,
-    unit_area,
-    property_type,
-    image_url,
-    is_active,
-    created_at,
-    updated_at
-) VALUES (
-    4,
-    'New Sample Property',
-    '101 New Street',
-    'Level 3',
-    '95 sqm',
-    'Condo',
-    'https://example.com/image.jpg',
-    TRUE,
-    NOW(),
-    NOW()
-);
-
 
