@@ -18,10 +18,7 @@ const Navbar = ({ activeTab, setActiveTab }) => {
         { id: 'user-accounts', label: 'User Accounts', icon: '👥' },
         { id: 'properties', label: 'Properties', icon: '🏢' },
         { id: 'feedback', label: 'Feedback', icon: '💬' },
-<<<<<<< HEAD
-=======
         { id: 'review', label: 'Review', icon: '⭐' },
->>>>>>> Mandy
         { id: 'content', label: 'Content', icon: '📄' },
         { id: 'regions', label: 'Regions', icon: '📍' }
       ];
