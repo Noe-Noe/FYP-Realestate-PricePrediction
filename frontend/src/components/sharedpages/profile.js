@@ -712,7 +712,6 @@ const Profile = () => {
 
   const handleBackToSubscription = () => {
     setShowCheckoutModal(false);
-    setShowSubscriptionModal(true);
     // Only show subscription modal if user came from subscription modal
     // If they came directly to checkout (from price prediction), go back to price prediction page
     if (location.state?.showCheckoutModal) {
@@ -1314,7 +1313,6 @@ const Profile = () => {
 
       {/* Payment Checkout Modal */}
       {showCheckoutModal && (
-        <div className="profile-modal-overlay checkout-modal-overlay">
         <div className="profile-modal-overlay checkout-modal-overlay" onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowCheckoutModal(false);
