@@ -266,6 +266,9 @@ CREATE TABLE agent_profiles (
     bio TEXT,
     contact_preferences JSONB,
     first_time_agent BOOLEAN DEFAULT TRUE,
+    verification_status VARCHAR(20) DEFAULT 'pending',
+    verification_checked_at TIMESTAMP,
+    registration_start_date DATE,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
@@ -314,6 +317,8 @@ CREATE TABLE business_inquiries (
     message TEXT NOT NULL,
     status VARCHAR(20) CHECK (status IN ('new', 'in_progress', 'resolved', 'closed')) DEFAULT 'new',
     assigned_to INTEGER NULL,
+    admin_response TEXT,
+    admin_response_date TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
@@ -501,9 +506,6 @@ CREATE TRIGGER update_faq_entries_updated_at BEFORE UPDATE ON faq_entries
 CREATE TRIGGER update_business_inquiries_updated_at BEFORE UPDATE ON business_inquiries
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Update team_members.image_url to TEXT to support base64 data URLs
-ALTER TABLE team_members ALTER COLUMN image_url TYPE TEXT;
-
 -- Schools table (for property nearby schools data)
 CREATE TABLE IF NOT EXISTS schools (
     id SERIAL PRIMARY KEY,
@@ -605,6 +607,34 @@ CREATE TRIGGER update_feedback_form_types_updated_at BEFORE UPDATE ON feedback_f
 
 CREATE TRIGGER update_reviews_updated_at BEFORE UPDATE ON reviews
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Email verification codes table (for OTP email verification)
+CREATE TABLE IF NOT EXISTS email_verification_codes (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    otp VARCHAR(6) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    verified BOOLEAN DEFAULT FALSE,
+    verified_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Password reset codes table (for OTP password reset)
+CREATE TABLE IF NOT EXISTS password_reset_codes (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    otp VARCHAR(6) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for OTP tables for better performance
+CREATE INDEX IF NOT EXISTS idx_email_verification_email ON email_verification_codes(email);
+CREATE INDEX IF NOT EXISTS idx_email_verification_expires ON email_verification_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_password_reset_email ON password_reset_codes(email);
+CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_codes(expires_at);
 
 INSERT INTO howitworks_properties
   (id, property_order, title, address, level, unit_area, property_type, image_url, is_active)
