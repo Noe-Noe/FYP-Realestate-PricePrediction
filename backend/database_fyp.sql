@@ -666,3 +666,29 @@ INSERT INTO users (
     FALSE
 )
 ON CONFLICT (email) DO NOTHING;
+
+-- INSERT INTO HOW IT WORKS PROPERTIES
+INSERT INTO howitworks_properties (
+    property_order,
+    title,
+    address,
+    level,
+    unit_area,
+    property_type,
+    image_url,
+    is_active,
+    created_at,
+    updated_at
+) VALUES (
+    4,
+    'New Sample Property',
+    '101 New Street',
+    'Level 3',
+    '95 sqm',
+    'Condo',
+    'https://example.com/image.jpg',
+    TRUE,
+    NOW(),
+    NOW()
+);
+
