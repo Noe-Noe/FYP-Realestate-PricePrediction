@@ -712,9 +712,7 @@ const Profile = () => {
 
   const handleBackToSubscription = () => {
     setShowCheckoutModal(false);
-<<<<<<< HEAD
     setShowSubscriptionModal(true);
-=======
     // Only show subscription modal if user came from subscription modal
     // If they came directly to checkout (from price prediction), go back to price prediction page
     if (location.state?.showCheckoutModal) {
@@ -723,7 +721,6 @@ const Profile = () => {
     } else {
     setShowSubscriptionModal(true);
     }
->>>>>>> Mandy
   };
 
   const getPlanPrice = () => {
