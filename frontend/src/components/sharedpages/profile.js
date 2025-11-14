@@ -1314,15 +1314,12 @@ const Profile = () => {
 
       {/* Payment Checkout Modal */}
       {showCheckoutModal && (
-<<<<<<< HEAD
         <div className="profile-modal-overlay checkout-modal-overlay">
-=======
         <div className="profile-modal-overlay checkout-modal-overlay" onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowCheckoutModal(false);
           }
         }}>
->>>>>>> Mandy
           <div className="checkout-modal-container">
             {/* Left Panel - Payment Form */}
             <div className="checkout-form-panel">
